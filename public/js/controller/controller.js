@@ -7,7 +7,7 @@
  * glisser du d-pad gauche vers droite).
  */
 
-import { CHARACTER_LIST } from '../game/characters.js';
+import * as Net from '../net/peernet.js';
 
 const $ = (s) => document.querySelector(s);
 const $$ = (s) => Array.from(document.querySelectorAll(s));
@@ -15,57 +15,41 @@ const $$ = (s) => Array.from(document.querySelectorAll(s));
 const params = new URLSearchParams(location.search);
 let room = (params.get('room') || '').toUpperCase();
 
-let ws = null;
+let net = null;
 let slot = null;
 let selectedIdx = 0;
 let isReady = false;
 let started = false;
 
 // ------------------------------------------------------------------
-// Réseau
+// Réseau (client peer-to-peer)
 // ------------------------------------------------------------------
-function connect() {
-  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
-  ws = new WebSocket(`${proto}://${location.host}`);
-  ws.addEventListener('open', () => {
-    if (room) send({ t: 'hello', role: 'controller', room });
-    else showCodeEntry();
-  });
-  ws.addEventListener('message', (ev) => {
-    let msg; try { msg = JSON.parse(ev.data); } catch { return; }
-    onMessage(msg);
-  });
-  ws.addEventListener('close', () => {
-    setStatus('Déconnecté. Reconnexion…');
-    setTimeout(connect, 1200);
-  });
-  ws.addEventListener('error', () => setStatus('Erreur de connexion'));
+async function connectRoom(code) {
+  room = code;
+  setStatus('Connexion…');
+  try {
+    net = await Net.join(code, {
+      onWelcome: (assigned) => { slot = assigned; goToSelect(); },
+      onMessage: (msg) => onMessage(msg),
+      onError: (reason) => {
+        if (reason === 'no-room') { setStatus(''); showCodeEntry('Partie introuvable. Vérifie le code affiché sur l\'écran.'); }
+        else if (reason === 'full') setStatus('La partie est déjà pleine (2 joueurs).');
+        else setStatus('Connexion perdue… vérifie ta connexion et réessaie.');
+      },
+      onHostLeft: () => setStatus("L'écran s'est déconnecté…"),
+    });
+  } catch (e) {
+    setStatus('Erreur de connexion');
+  }
 }
 
-function send(obj) {
-  if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(obj));
-}
+function send(obj) { if (net) net.send(obj); }
 
 function onMessage(msg) {
+  if (!msg) return;
   switch (msg.t) {
-    case 'welcome':
-      slot = msg.slot;
-      room = msg.room;
-      goToSelect();
-      break;
-    case 'error':
-      if (msg.reason === 'no-room') { setStatus(''); showCodeEntry(msg.message); }
-      else setStatus(msg.message || 'Erreur');
-      break;
-    case 'buzz':
-      vibrate(msg.pattern);
-      break;
-    case 'state':
-      updateHud(msg);
-      break;
-    case 'screen-left':
-      setStatus("L'écran s'est déconnecté…");
-      break;
+    case 'buzz': vibrate(msg.pattern); break;
+    case 'state': updateHud(msg); break;
   }
 }
 
@@ -226,7 +210,7 @@ $$('.char-pick').forEach((b) => b.addEventListener('click', () => selectChar(Num
 $('#readyBtn').addEventListener('click', doReady);
 $('#codeBtn').addEventListener('click', () => {
   const code = $('#codeInput').value.trim().toUpperCase();
-  if (code.length >= 3) { room = code; $('#codeEntry').classList.add('hidden'); setStatus('Connexion…'); send({ t: 'hello', role: 'controller', room }); }
+  if (code.length >= 3) { $('#codeEntry').classList.add('hidden'); connectRoom(code); }
 });
 $('#codeInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('#codeBtn').click(); });
 
@@ -237,4 +221,5 @@ document.addEventListener('dblclick', (e) => e.preventDefault(), { passive: fals
 document.addEventListener('gesturestart', (e) => e.preventDefault());
 
 bindPad();
-connect();
+if (room) connectRoom(room);
+else showCodeEntry();

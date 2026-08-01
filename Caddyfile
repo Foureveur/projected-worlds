@@ -1,9 +1,0 @@
-# Reverse proxy + HTTPS automatique pour Rage Royale.
-# Caddy obtient et renouvelle le certificat TLS tout seul (Let's Encrypt),
-# et gère nativement l'upgrade WebSocket. Rien d'autre à configurer.
-#
-# Prérequis : un enregistrement DNS A "rage.partiqle.studio" -> IP du VPS.
-
-rage.partiqle.studio {
-	reverse_proxy app:3000
-}

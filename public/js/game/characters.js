@@ -35,8 +35,8 @@ const meregrand = {
   palette: {
     skin: '#e8b88a',
     hair: '#e9e9ef',
-    cloth: '#7a3ea0', // robe violette
-    cloth2: '#5a2b78',
+    cloth: '#f272b0', // robe rose
+    cloth2: '#c53f86', // rose foncé (jambes / ombres)
     accent: '#f2c14e', // châle / lunettes dorées
     weapon: '#8a5a2b', // canne
   },

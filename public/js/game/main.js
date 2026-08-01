@@ -1,8 +1,8 @@
 /**
  * main.js (écran de jeu)
  * ----------------------
- * - se connecte au serveur en tant qu'"écran"
- * - affiche le salon (QR code + code de room) en attendant 2 manettes
+ * - devient l'HÔTE peer-to-peer (les manettes s'y connectent en direct)
+ * - affiche le salon (QR code + code de partie) en attendant 2 manettes
  * - gère la sélection des personnages
  * - lance la boucle de jeu à pas fixe (60 Hz) et le rendu
  * - renvoie son + vibrations aux bonnes manettes
@@ -13,7 +13,8 @@ import { TICK_MS } from './constants.js';
 import { Engine } from './engine.js';
 import { Renderer } from './renderer.js';
 import { AudioFx } from './audio.js';
-import { CHARACTER_LIST, getCharacter } from './characters.js';
+import { CHARACTER_LIST } from './characters.js';
+import * as Net from '../net/peernet.js';
 
 const $ = (sel) => document.querySelector(sel);
 
@@ -21,7 +22,7 @@ const canvas = $('#game');
 const renderer = new Renderer(canvas);
 const audio = new AudioFx();
 
-let ws = null;
+let net = null;
 let room = null;
 let paused = false;
 let mode = 'lobby'; // 'lobby' | 'playing'
@@ -39,59 +40,38 @@ const engine = new Engine({
 });
 
 // ------------------------------------------------------------------
-// Réseau
+// Réseau (hôte peer-to-peer)
 // ------------------------------------------------------------------
-function connect() {
-  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
-  ws = new WebSocket(`${proto}://${location.host}`);
-  ws.addEventListener('open', () => {
-    send({ t: 'hello', role: 'screen' });
-  });
-  ws.addEventListener('message', (ev) => {
-    let msg; try { msg = JSON.parse(ev.data); } catch { return; }
-    onMessage(msg);
-  });
-  ws.addEventListener('close', () => {
-    setTimeout(connect, 1000); // reconnexion auto
-  });
-}
-
-function send(obj) {
-  if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(obj));
-}
-
-function onMessage(msg) {
-  switch (msg.t) {
-    case 'welcome':
-      room = msg.room;
-      showLobby(msg);
-      break;
-    case 'player-join':
-      selection[msg.slot].connected = true;
-      selection[msg.slot].ready = false;
-      updateLobby();
-      break;
-    case 'player-leave':
-      selection[msg.slot].connected = false;
-      selection[msg.slot].ready = false;
-      if (mode === 'playing') { paused = true; }
-      updateLobby();
-      break;
-    case 'select':
-      if (msg.from && typeof msg.charIdx === 'number') {
-        selection[msg.from].charIdx = msg.charIdx;
+async function startHost() {
+  try {
+    net = await Net.host({
+      onReady: ({ roomCode, joinUrl }) => { room = roomCode; showLobby(roomCode, joinUrl); },
+      onJoin: (slot) => { selection[slot].connected = true; selection[slot].ready = false; updateLobby(); },
+      onLeave: (slot) => {
+        selection[slot].connected = false; selection[slot].ready = false;
+        if (mode === 'playing') paused = true;
         updateLobby();
-      }
+      },
+      onMessage: (slot, msg) => onControllerMessage(slot, msg),
+      onError: (err) => console.warn('[net]', err),
+    });
+  } catch (e) {
+    console.error('Impossible de démarrer l\'hôte', e);
+    const el = $('#roomCode'); if (el) el.textContent = 'ERR';
+  }
+}
+
+function onControllerMessage(slot, msg) {
+  if (!msg) return;
+  switch (msg.t) {
+    case 'select':
+      if (typeof msg.charIdx === 'number') { selection[slot].charIdx = msg.charIdx; updateLobby(); }
       break;
     case 'ready':
-      if (msg.from) {
-        selection[msg.from].ready = !!msg.ready;
-        updateLobby();
-        maybeStart();
-      }
+      selection[slot].ready = !!msg.ready; updateLobby(); maybeStart();
       break;
     case 'input':
-      onControllerInput(msg.from, msg.btn, msg.down);
+      onControllerInput(slot, msg.btn, msg.down);
       break;
   }
 }
@@ -109,12 +89,36 @@ function onControllerInput(slot, btn, down) {
 // ------------------------------------------------------------------
 // Salon / sélection
 // ------------------------------------------------------------------
-function showLobby(welcome) {
+function showLobby(roomCode, joinUrl) {
   $('#lobby').classList.remove('hidden');
-  $('#roomCode').textContent = welcome.room;
-  $('#joinUrl').textContent = welcome.joinUrl;
-  $('#qr').src = `/qr?text=${encodeURIComponent(welcome.joinUrl)}`;
+  $('#roomCode').textContent = roomCode;
+  $('#joinUrl').textContent = joinUrl;
+  renderQR(joinUrl, $('#qr'));
   updateLobby();
+}
+
+// Génère le QR code côté client (aucun serveur requis)
+function renderQR(text, imgEl) {
+  if (!imgEl || typeof qrcode === 'undefined') return;
+  try {
+    const qr = qrcode(0, 'M');
+    qr.addData(text);
+    qr.make();
+    const count = qr.getModuleCount();
+    const cell = 6, margin = 2;
+    const size = (count + margin * 2) * cell;
+    const c = document.createElement('canvas');
+    c.width = c.height = size;
+    const g = c.getContext('2d');
+    g.fillStyle = '#f5d90a'; g.fillRect(0, 0, size, size);
+    g.fillStyle = '#1a1030';
+    for (let r = 0; r < count; r++) {
+      for (let col = 0; col < count; col++) {
+        if (qr.isDark(r, col)) g.fillRect((col + margin) * cell, (r + margin) * cell, cell, cell);
+      }
+    }
+    imgEl.src = c.toDataURL();
+  } catch (e) { console.warn('qr', e); }
 }
 
 function updateLobby() {
@@ -186,8 +190,8 @@ function handleHaptics(type, data) {
 }
 
 function buzz(slot, pattern) {
-  if (!slot) return;
-  send({ t: 'buzz', to: slot, pattern });
+  if (!slot || !net) return;
+  net.send(slot, { t: 'buzz', pattern });
 }
 
 let stateTick = 0;
@@ -196,11 +200,11 @@ function broadcastState(force = false) {
   pushState('p2', force);
 }
 
-function pushState(slot, force = false) {
+function pushState(slot) {
   const f = engine.fighters[slot];
-  if (!f) return;
-  send({
-    t: 'state', to: slot,
+  if (!f || !net) return;
+  net.send(slot, {
+    t: 'state',
     health: Math.round(f.health),
     rage: Math.round(f.rage),
     form: f.formIndex,
@@ -320,4 +324,4 @@ window.addEventListener('pointerdown', () => {
   if (mode === 'lobby') audio.startMusic('menu');
 }, { once: true });
 
-connect();
+startHost();

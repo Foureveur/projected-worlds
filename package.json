@@ -13,15 +13,17 @@
   },
   "dependencies": {
     "express": "^4.19.2",
-    "qrcode": "^1.5.4",
-    "ws": "^8.18.0"
+    "peer": "^1.0.2",
+    "peerjs": "^1.5.5",
+    "qrcode-generator": "^2.0.4"
   },
   "keywords": [
     "game",
     "fighting",
     "retro",
     "multiplayer",
-    "websocket",
+    "webrtc",
+    "peer-to-peer",
     "canvas"
   ],
   "license": "MIT"
