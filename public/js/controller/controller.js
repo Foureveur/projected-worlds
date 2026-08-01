@@ -8,6 +8,7 @@
  */
 
 import * as Net from '../net/peernet.js';
+import { CHARACTER_LIST } from '../game/characters.js';
 
 const $ = (s) => document.querySelector(s);
 const $$ = (s) => Array.from(document.querySelectorAll(s));
@@ -91,6 +92,32 @@ function doReady() {
   show('#pad');
   $('#waiting').classList.remove('hidden');
   checkOrientation();
+}
+
+function doSolo() {
+  send({ t: 'solo' });
+  show('#pad');
+  $('#waiting').textContent = 'Chargement du combat vs CPU…';
+  $('#waiting').classList.remove('hidden');
+  checkOrientation();
+}
+
+// Cartes de perso générées depuis la liste (2 originaux + 2 Dark)
+function renderCharCards() {
+  const grid = $('#charGrid');
+  if (!grid) return;
+  grid.innerHTML = '';
+  CHARACTER_LIST.forEach((c, idx) => {
+    const b = document.createElement('button');
+    b.className = 'char-pick';
+    b.dataset.idx = String(idx);
+    b.innerHTML =
+      `<div class="emoji">${c.emoji || '🥊'}</div>` +
+      `<div class="cname">${c.name}</div>` +
+      `<div class="cforms">${c.formNames.join(' › ')}</div>`;
+    b.addEventListener('click', () => selectChar(idx));
+    grid.appendChild(b);
+  });
 }
 
 // ------------------------------------------------------------------
@@ -206,8 +233,9 @@ function checkOrientation() {
 // ------------------------------------------------------------------
 // Init
 // ------------------------------------------------------------------
-$$('.char-pick').forEach((b) => b.addEventListener('click', () => selectChar(Number(b.dataset.idx))));
+renderCharCards();
 $('#readyBtn').addEventListener('click', doReady);
+$('#soloBtn').addEventListener('click', doSolo);
 $('#codeBtn').addEventListener('click', () => {
   const code = $('#codeInput').value.trim().toUpperCase();
   if (code.length >= 3) { $('#codeEntry').classList.add('hidden'); connectRoom(code); }

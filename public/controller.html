@@ -29,25 +29,17 @@
   <!-- Sélection du personnage -->
   <section id="select" class="screen hidden">
     <h2>Choisis ton combattant</h2>
-    <div class="char-grid">
-      <button class="char-pick" data-idx="0">
-        <div class="emoji">👵</div>
-        <div class="cname">Mère-Grand</div>
-        <div class="cforms">Mémé Tranquille › Mamie Remontée › Grand-Mère Loup</div>
-      </button>
-      <button class="char-pick" data-idx="1">
-        <div class="emoji">👨</div>
-        <div class="cname">Padre</div>
-        <div class="cforms">Papa Cool › Père Sévère › El Padre Furioso</div>
-      </button>
-    </div>
+    <div class="char-grid" id="charGrid"><!-- rempli par controller.js --></div>
     <div class="moves-legend">
       <span>👊 Coup</span><span>🦶 Pied</span><span>⚡ Spécial</span><span>🛡 Garde</span>
       <span class="combo-tip">🛡+👊 Projection</span>
       <span class="combo-tip">◀◀ / ▶▶ Dash</span>
       <span class="combo-tip">Coups enchaînés = Combos</span>
     </div>
-    <button id="readyBtn" class="big-btn">PRÊT !</button>
+    <div class="select-actions">
+      <button id="readyBtn" class="big-btn">PRÊT ! (2 joueurs)</button>
+      <button id="soloBtn" class="big-btn solo">🤖 Solo vs CPU</button>
+    </div>
   </section>
 
   <!-- Manette de jeu -->

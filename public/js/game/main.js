@@ -14,6 +14,7 @@ import { Engine } from './engine.js';
 import { Renderer } from './renderer.js';
 import { AudioFx } from './audio.js';
 import { CHARACTER_LIST } from './characters.js';
+import { AIController } from './ai.js';
 import * as Net from '../net/peernet.js';
 
 const $ = (sel) => document.querySelector(sel);
@@ -26,6 +27,9 @@ let net = null;
 let room = null;
 let paused = false;
 let mode = 'lobby'; // 'lobby' | 'playing'
+let ai = null;         // adversaire CPU (mode 1 joueur)
+let soloMode = false;
+let humanSlot = null;  // slot du joueur humain en solo
 
 const selection = {
   p1: { connected: false, charIdx: 0, ready: false },
@@ -70,6 +74,9 @@ function onControllerMessage(slot, msg) {
     case 'ready':
       selection[slot].ready = !!msg.ready; updateLobby(); maybeStart();
       break;
+    case 'solo':
+      startSolo(slot);
+      break;
     case 'input':
       onControllerInput(slot, msg.btn, msg.down);
       break;
@@ -78,6 +85,7 @@ function onControllerMessage(slot, msg) {
 
 function onControllerInput(slot, btn, down) {
   if (!slot) return;
+  if (soloMode && slot !== humanSlot) return; // en solo, une seule manette pilote
   // En fin de match, ⚡ Spécial relance une revanche.
   if (mode === 'playing' && engine.phase === 'matchEnd') {
     if (btn === 'special' && down) restartMatch();
@@ -163,6 +171,24 @@ function restartMatch() {
   broadcastState(true);
 }
 
+// --- Mode 1 joueur (vs CPU) ---
+function startSolo(slot) {
+  audio.init();
+  audio.startMusic('battle');
+  humanSlot = slot;
+  soloMode = true;
+  const cpuSlot = slot === 'p1' ? 'p2' : 'p1';
+  const humanIdx = selection[slot].charIdx;
+  selection[slot].connected = true;
+  selection[cpuSlot].charIdx = (humanIdx + 1) % CHARACTER_LIST.length;
+  mode = 'playing';
+  paused = false;
+  $('#lobby').classList.add('hidden');
+  engine.configure(CHARACTER_LIST[selection.p1.charIdx].id, CHARACTER_LIST[selection.p2.charIdx].id);
+  ai = new AIController(cpuSlot, slot, 1);
+  broadcastState(true);
+}
+
 // ------------------------------------------------------------------
 // Vibrations & état vers les manettes
 // ------------------------------------------------------------------
@@ -227,7 +253,10 @@ function frame(now) {
   acc += dt;
   let steps = 0;
   while (acc >= TICK_MS && steps < 5) {
-    if (mode === 'playing' && !paused) engine.update();
+    if (mode === 'playing' && !paused) {
+      if (ai) ai.update(engine);
+      engine.update();
+    }
     acc -= TICK_MS;
     steps++;
   }
@@ -270,9 +299,11 @@ window.addEventListener('keydown', (e) => {
   if (e.code === 'KeyM') { const muted = audio.toggleMute(); showToast(muted ? '🔇 Son coupé' : '🔊 Son activé'); return; }
   const m = KEYMAP[e.code];
   if (!m) {
+    if (e.code === 'KeyC' && mode === 'lobby') { startSoloKeyboard(); return; }
     if (e.code === 'Enter' && engine.phase === 'matchEnd') restartMatch();
     return;
   }
+  if (soloMode && m[0] !== humanSlot) return; // en solo au clavier, le J2 est le CPU
   e.preventDefault();
   if (keyHeld[e.code]) return;
   keyHeld[e.code] = true;
@@ -285,6 +316,7 @@ window.addEventListener('keydown', (e) => {
 window.addEventListener('keyup', (e) => {
   const m = KEYMAP[e.code];
   if (!m) return;
+  if (soloMode && m[0] !== humanSlot) return;
   keyHeld[e.code] = false;
   engine.setInput(m[0], m[1], false);
 });
@@ -300,6 +332,23 @@ function forceKeyboardStart() {
   paused = false;
   $('#lobby').classList.add('hidden');
   engine.configure(CHARACTER_LIST[selection.p1.charIdx].id, CHARACTER_LIST[selection.p2.charIdx].id);
+}
+
+// Solo au clavier : J1 = toi, J2 = CPU (touche C)
+function startSoloKeyboard() {
+  if (keyboardStarted) return;
+  keyboardStarted = true;
+  humanSlot = 'p1';
+  soloMode = true;
+  selection.p1.connected = true;
+  selection.p2.charIdx = (selection.p1.charIdx + 1) % CHARACTER_LIST.length;
+  audio.init();
+  audio.startMusic('battle');
+  mode = 'playing';
+  paused = false;
+  $('#lobby').classList.add('hidden');
+  engine.configure(CHARACTER_LIST[selection.p1.charIdx].id, CHARACTER_LIST[selection.p2.charIdx].id);
+  ai = new AIController('p2', 'p1', 1);
 }
 
 // Petit toast d'info (mute, etc.)

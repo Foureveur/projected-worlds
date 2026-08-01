@@ -261,7 +261,7 @@ export class Renderer {
     const headY = (68 * yScale) + bob;
     const reach = armExtend * 22;
     const armY = bodyTop - 8 + bob - lean * 10;
-    const id = f.char.id;
+    const id = f.char.sprite || f.char.id;
 
     // --- Jambes ---
     const legSwing = legPhase * 6;
@@ -361,7 +361,7 @@ export class Renderer {
   }
 
   _drawWeapon(ctx, part, f, x, y) {
-    const id = f.char.id;
+    const id = f.char.sprite || f.char.id;
     const pal = f.char.palette;
     if (f.attack && f.attack.kind === 'special') return; // projectile : pas d'arme
     if (f.attack && f.attack.isThrow) return;

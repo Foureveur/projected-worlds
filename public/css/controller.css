@@ -80,9 +80,12 @@ html, body {
   max-width: 340px; margin-bottom: 18px; font-size: 10px; color: #b7a9e0;
 }
 .moves-legend .combo-tip { color: var(--accent); }
+.select-actions { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; }
 #readyBtn { background: var(--green); }
 #readyBtn.armed { background: var(--accent); animation: pulse 1s infinite; }
+.big-btn.solo { background: var(--blue); }
 @keyframes pulse { 50% { transform: scale(1.05); } }
+.char-pick { width: 132px; }
 
 /* ---------- HUD ---------- */
 #hud {

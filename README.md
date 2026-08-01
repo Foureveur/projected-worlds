@@ -8,7 +8,12 @@ joueur utilise son iPhone comme manette**. Le twist : chaque personnage a
 ```
 👵 Mère-Grand : Mémé Tranquille  › Mamie Remontée › Grand-Mère Loup
 👨 Padre      : Papa Cool        › Père Sévère    › El Padre Furioso
+🧟‍♀️ Dark Mémé  : variante sombre (mêmes coups)
+🧛 Dark Padre : variante sombre (mêmes coups)
 ```
+
+**Modes :** 2 joueurs (chacun son iPhone) **ou** 1 joueur **vs CPU** (bouton
+« 🤖 Solo vs CPU » sur la manette, ou touche `C` au clavier).
 
 ---
 

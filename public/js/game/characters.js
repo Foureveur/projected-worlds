@@ -24,6 +24,8 @@ export const FORMS = [
 
 const meregrand = {
   id: 'meregrand',
+  sprite: 'meregrand', // quel dessin utiliser (les variantes Dark réutilisent)
+  emoji: '👵',
   name: 'Mère-Grand',
   short: 'MÉMÉ',
   body: { w: 40, h: 82 },
@@ -73,6 +75,8 @@ const meregrand = {
 
 const padre = {
   id: 'padre',
+  sprite: 'padre',
+  emoji: '👨',
   name: 'Padre',
   short: 'PADRE',
   body: { w: 42, h: 84 },
@@ -119,8 +123,33 @@ const padre = {
   ],
 };
 
-export const CHARACTERS = { meregrand, padre };
-export const CHARACTER_LIST = [meregrand, padre];
+// --- Variantes "Dark" (mêmes coups, palette + aura sombres) ---
+const darkmeregrand = {
+  ...meregrand,
+  id: 'darkmeregrand',
+  sprite: 'meregrand',
+  emoji: '🧟‍♀️',
+  name: 'Dark Mémé',
+  short: 'DK MÉMÉ',
+  palette: { skin: '#9a8a86', hair: '#8a8a9a', cloth: '#3a2246', cloth2: '#1e1228', accent: '#7a5a10', weapon: '#2a1a12' },
+  formNames: ['Dark Mémé', 'Mémé Maudite', 'Louve des Ténèbres'],
+  formAura: ['#6a1a9a', '#a02aff', '#ff1a3a'],
+};
+
+const darkpadre = {
+  ...padre,
+  id: 'darkpadre',
+  sprite: 'padre',
+  emoji: '🧛',
+  name: 'Dark Padre',
+  short: 'DK PADRE',
+  palette: { skin: '#a08a70', hair: '#141018', cloth: '#16161e', cloth2: '#0a0a10', accent: '#8a1420', weapon: '#241a10' },
+  formNames: ['Dark Padre', 'Père des Ténèbres', 'Padre Apocalypse'],
+  formAura: ['#1a6a9a', '#2a6aff', '#ff5a1a'],
+};
+
+export const CHARACTERS = { meregrand, padre, darkmeregrand, darkpadre };
+export const CHARACTER_LIST = [meregrand, padre, darkmeregrand, darkpadre];
 
 export function getCharacter(id) {
   return CHARACTERS[id] || meregrand;
