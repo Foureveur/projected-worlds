@@ -1,0 +1,28 @@
+{
+  "name": "rage-royale",
+  "version": "1.0.0",
+  "description": "Mère-Grand vs Padre — un jeu de combat rétro à 2 joueurs où chaque iPhone devient une manette. 3 formes de rage par personnage.",
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "qrcode": "^1.5.4",
+    "ws": "^8.18.0"
+  },
+  "keywords": [
+    "game",
+    "fighting",
+    "retro",
+    "multiplayer",
+    "websocket",
+    "canvas"
+  ],
+  "license": "MIT"
+}

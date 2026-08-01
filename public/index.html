@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>RAGE ROYALE — Mère-Grand vs Padre</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='14' font-size='14'>%E2%9A%94%EF%B8%8F</text></svg>" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/css/screen.css" />
+</head>
+<body>
+  <div id="app">
+    <div id="stage-wrap">
+      <canvas id="game"></canvas>
+
+      <!-- Salon d'attente -->
+      <div id="lobby">
+        <div class="lobby-inner">
+          <h1 class="title">RAGE&nbsp;ROYALE</h1>
+          <p class="subtitle">MÈRE-GRAND <span>vs</span> PADRE</p>
+
+          <div class="join">
+            <div class="join-qr">
+              <img id="qr" alt="QR code pour rejoindre" />
+              <div class="scan-hint">📱 Scanne avec ton iPhone</div>
+            </div>
+            <div class="join-info">
+              <div class="label">Code de la partie</div>
+              <div id="roomCode" class="room-code">····</div>
+              <div class="label">ou va sur</div>
+              <div id="joinUrl" class="join-url">…</div>
+            </div>
+          </div>
+
+          <div class="cards">
+            <div id="card-p1" class="card">
+              <div class="tag">JOUEUR 1</div>
+              <div class="char-name">—</div>
+              <div class="char-sub">—</div>
+              <div class="status">En attente du téléphone…</div>
+            </div>
+            <div id="card-p2" class="card">
+              <div class="tag">JOUEUR 2</div>
+              <div class="char-name">—</div>
+              <div class="char-sub">—</div>
+              <div class="status">En attente du téléphone…</div>
+            </div>
+          </div>
+
+          <p class="hint">Astuce : clavier de secours pour tester —
+            <b>J1</b> A/D W S + F/G/H/V · <b>J2</b> ←/→ ↑ ↓ + J/K/L/N</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="/js/game/main.js"></script>
+</body>
+</html>

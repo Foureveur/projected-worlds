@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="theme-color" content="#0d0820" />
+  <title>Manette · Rage Royale</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='14' font-size='14'>%F0%9F%8E%AE</text></svg>" />
+  <link rel="stylesheet" href="/css/controller.css" />
+</head>
+<body>
+  <!-- Écran de connexion -->
+  <section id="connect" class="screen">
+    <h1>RAGE ROYALE</h1>
+    <p class="tagline">Ta manette</p>
+    <div id="connectStatus">Connexion…</div>
+    <div id="codeEntry" class="hidden">
+      <p>Entre le code affiché sur l'écran :</p>
+      <input id="codeInput" maxlength="4" autocapitalize="characters" autocomplete="off" placeholder="XXXX" />
+      <button id="codeBtn">Rejoindre</button>
+    </div>
+  </section>
+
+  <!-- Sélection du personnage -->
+  <section id="select" class="screen hidden">
+    <h2>Choisis ton combattant</h2>
+    <div class="char-grid">
+      <button class="char-pick" data-idx="0">
+        <div class="emoji">👵</div>
+        <div class="cname">Mère-Grand</div>
+        <div class="cforms">Mémé Tranquille › Mamie Remontée › Grand-Mère Loup</div>
+      </button>
+      <button class="char-pick" data-idx="1">
+        <div class="emoji">👨</div>
+        <div class="cname">Padre</div>
+        <div class="cforms">Papa Cool › Père Sévère › El Padre Furioso</div>
+      </button>
+    </div>
+    <button id="readyBtn" class="big-btn">PRÊT !</button>
+  </section>
+
+  <!-- Manette de jeu -->
+  <section id="pad" class="screen hidden">
+    <div id="hud">
+      <div class="hud-name"><span id="hudName">—</span> · <span id="hudForm">—</span></div>
+      <div class="bars">
+        <div class="bar"><div id="hudHp" class="fill hp"></div></div>
+        <div class="bar rage"><div id="hudRage" class="fill rg"></div></div>
+      </div>
+      <div class="hud-special">⚡ <span id="hudSpecial">—</span></div>
+    </div>
+
+    <div id="waiting" class="waiting">En attente de l'autre joueur…</div>
+
+    <div class="controls">
+      <!-- Croix directionnelle -->
+      <div class="dpad">
+        <button class="btn dir up" data-btn="up"><span>▲</span><small>SAUT</small></button>
+        <button class="btn dir left" data-btn="left">◀</button>
+        <button class="btn dir right" data-btn="right">▶</button>
+        <button class="btn dir down" data-btn="down"><span>▼</span><small>BAS</small></button>
+      </div>
+
+      <!-- Boutons d'action -->
+      <div class="actions">
+        <button class="btn act punch" data-btn="punch"><span>👊</span><small>COUP</small></button>
+        <button class="btn act kick" data-btn="kick"><span>🦶</span><small>PIED</small></button>
+        <button class="btn act special" data-btn="special"><span>⚡</span><small>SPÉCIAL</small></button>
+        <button class="btn act block" data-btn="block"><span>🛡</span><small>GARDE</small></button>
+      </div>
+    </div>
+  </section>
+
+  <!-- Invite à tourner l'écran -->
+  <div id="rotate" class="rotate hidden">
+    <div>🔄<br />Tourne ton iPhone<br />en mode paysage</div>
+  </div>
+
+  <script type="module" src="/js/controller/controller.js"></script>
+</body>
+</html>
