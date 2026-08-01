@@ -33,6 +33,13 @@ export class Engine {
     this.phaseTimer = 0;
     this.roundTimer = ROUND_TIME * 60;
     this.round = 1;
+    this.roundsToWin = ROUNDS_TO_WIN; // configurable (nb de manches gagnantes)
+    this.viewW = VIEW_W;              // largeur d'affichage (dynamique, pour la caméra)
+    // Plateformes traversables (sens unique) — sauter dessus, ↓ pour redescendre
+    this.platforms = [
+      { x: STAGE_W * 0.28, y: 214, w: 150 },
+      { x: STAGE_W * 0.72, y: 214, w: 150 },
+    ];
     this.announce = null; // { text, sub, timer, big }
     this.camera = { x: 0, zoom: 1 };
     this.winnerSlot = null;
@@ -131,7 +138,7 @@ export class Engine {
           this.hooks.onEvent('fight', {});
         } else if (this.phase === 'roundEnd') {
           const p1 = this.fighters.p1, p2 = this.fighters.p2;
-          if (p1.wins >= ROUNDS_TO_WIN || p2.wins >= ROUNDS_TO_WIN) {
+          if (p1.wins >= this.roundsToWin || p2.wins >= this.roundsToWin) {
             this._startMatchEnd();
           } else {
             this.round++;
@@ -333,11 +340,11 @@ export class Engine {
     const minX = Math.min(p1.pos.x, p2.pos.x) - margin;
     const maxX = Math.max(p1.pos.x, p2.pos.x) + margin;
     const span = Math.max(280, maxX - minX);
-    let zoom = VIEW_W / span;
+    let zoom = this.viewW / span;
     zoom = Math.max(0.72, Math.min(1.18, zoom));
     const mid = (p1.pos.x + p2.pos.x) / 2;
-    let camX = mid - (VIEW_W / zoom) / 2;
-    camX = Math.max(0, Math.min(STAGE_W - VIEW_W / zoom, camX));
+    let camX = mid - (this.viewW / zoom) / 2;
+    camX = Math.max(0, Math.min(STAGE_W - this.viewW / zoom, camX));
     // Lissage
     this.camera.x += (camX - this.camera.x) * 0.18;
     this.camera.zoom += (zoom - this.camera.zoom) * 0.12;

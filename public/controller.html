@@ -40,6 +40,7 @@
       <span class="mt-label">Manette&nbsp;:</span>
       <button class="mode-opt" data-mode="dpad">✚ Croix</button>
       <button class="mode-opt" data-mode="joy">🕹 Joystick</button>
+      <button class="mode-opt" data-mode="mix">🎛 Mixte</button>
     </div>
     <div class="select-actions">
       <button id="readyBtn" class="big-btn">PRÊT ! (2 joueurs)</button>
@@ -78,14 +79,26 @@
           <div class="joy-ring"></div>
           <div class="joy-knob" id="joyKnob">🕹</div>
         </div>
+        <div class="mixzone" id="mixzone">
+          <button class="dcell diag mx mx-ul" data-dirs="up left">↖</button>
+          <button class="dcell mx mx-u" data-dirs="up">↑</button>
+          <button class="dcell diag mx mx-ur" data-dirs="up right">↗</button>
+          <button class="dcell mx mx-l" data-dirs="left">◀</button>
+          <button class="dcell mx mx-r" data-dirs="right">▶</button>
+          <button class="dcell diag mx mx-dl" data-dirs="down left">↙</button>
+          <button class="dcell mx mx-d" data-dirs="down">↓</button>
+          <button class="dcell diag mx mx-dr" data-dirs="down right">↘</button>
+          <div class="joystick mini" id="joystickMix"><div class="joy-knob" id="joyKnobMix">🕹</div></div>
+        </div>
       </div>
 
-      <!-- Boutons d'action -->
+      <!-- Boutons d'action (diamant façon PlayStation) + saut -->
       <div class="actions">
-        <button class="btn act punch" data-btn="punch"><span>👊</span><small>COUP</small></button>
-        <button class="btn act kick" data-btn="kick"><span>🦶</span><small>PIED</small></button>
+        <button class="btn act jump" data-btn="up"><span>▲</span><small>SAUT</small></button>
         <button class="btn act special" data-btn="special"><span>⚡</span><small>SPÉCIAL</small></button>
         <button class="btn act block" data-btn="block"><span>🛡</span><small>GARDE</small></button>
+        <button class="btn act kick" data-btn="kick"><span>🦶</span><small>PIED</small></button>
+        <button class="btn act punch" data-btn="punch"><span>👊</span><small>COUP</small></button>
       </div>
     </div>
   </section>

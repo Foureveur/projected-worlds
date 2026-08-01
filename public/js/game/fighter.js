@@ -18,7 +18,7 @@ import {
   GRAVITY, MAX_FALL, FRICTION_GROUND, FRICTION_AIR, GROUND_Y, STAGE_W,
   START_HEALTH, RAGE_MAX, RAGE_THRESHOLDS, STATE,
   DOUBLE_TAP_FRAMES, DASH_FRAMES, DASH_SPEED, BACKDASH_SPEED, BACKDASH_INVULN,
-  MAX_COMBO_CHAIN, GRAB_RANGE,
+  MAX_COMBO_CHAIN, GRAB_RANGE, SPECIAL_SALVO, SPECIAL_LOCK_FRAMES,
 } from './constants.js';
 import { FORMS } from './characters.js';
 
@@ -54,12 +54,16 @@ export class Fighter {
     this.dashForward = true;
     this.comboChain = 0;   // nb de coups enchaînés par cancel
     this.armorActive = false;
+    this.specialCount = 0; // spéciaux tirés dans la salve courante
+    this.specialLock = 0;  // recharge forcée après une salve (frames)
 
     this.invuln = 0;      // frames d'invincibilité (transform / backdash)
     this.blockFlash = 0;  // effet visuel de garde
     this.hitFlash = 0;    // clignotement quand touché
     this.tumbling = 0;    // roule-boule après une projection
     this.landSquash = 0;  // écrasement à l'atterrissage (juice)
+    this.onPlatform = null; // y de la plateforme sous les pieds (ou null)
+    this.dropThrough = 0;   // frames où l'on traverse les plateformes (↓)
     this.animTime = 0;    // horloge pour les animations de rendu
     this.wins = 0;
   }
@@ -108,9 +112,13 @@ export class Fighter {
     this.dashTimer = 0;
     this.comboChain = 0;
     this.armorActive = false;
+    this.specialCount = 0;
+    this.specialLock = 0;
     this.invuln = 0;
     this.tumbling = 0;
     this.landSquash = 0;
+    this.onPlatform = null;
+    this.dropThrough = 0;
     this.onGround = true;
     for (const k in this.input) this.input[k] = false;
   }
@@ -171,16 +179,17 @@ export class Fighter {
     if (this.tumbling > 0) this.tumbling--;
     if (this.landSquash > 0) this.landSquash--;
 
-    if (!active) { this._physics(); this._clampStage(); return; }
+    if (!active) { this._physics(engine); this._clampStage(); return; }
 
     if (this.jumpBuffer > 0) this.jumpBuffer--;
     if (this.attackBuffer && --this.attackBuffer.frames <= 0) this.attackBuffer = null;
     if (this.dashBuffer && --this.dashBuffer.frames <= 0) this.dashBuffer = null;
     if (this.invuln > 0) this.invuln--;
+    if (this.specialLock > 0) this.specialLock--;
 
     this._updateForm(engine);
 
-    if (this.state === STATE.KO) { this._physics(); return; }
+    if (this.state === STATE.KO) { this._physics(engine); return; }
 
     // Dash en cours (annulable par une attaque)
     if (this.state === STATE.DASH) {
@@ -193,7 +202,7 @@ export class Fighter {
         }
       }
       if (this.state === STATE.DASH && this.dashTimer <= 0) this.state = STATE.IDLE;
-      this._physics(); this._clampStage();
+      this._physics(engine); this._clampStage();
       return;
     }
 
@@ -223,7 +232,7 @@ export class Fighter {
 
     if (this.canAct()) this._handleActions(engine);
 
-    this._physics();
+    this._physics(engine);
     this._clampStage();
   }
 
@@ -253,6 +262,8 @@ export class Fighter {
     this.invuln = TRANSFORM_FRAMES;
     this.attack = null;
     this.comboChain = 0;
+    this.specialCount = 0;  // salve de spéciaux remise à zéro à chaque palier
+    this.specialLock = 0;
     this.vel.x = 0;
     this.health = Math.min(START_HEALTH, this.health + 10);
     engine.onTransform(this);
@@ -293,6 +304,11 @@ export class Fighter {
     if (!this.attack) {
       if (this.onGround) {
         if (inp.block) { this.state = STATE.BLOCK; this.vel.x *= 0.6; }
+        else if (inp.down && this.onPlatform != null) {
+          // ↓ sur une plateforme => on redescend en la traversant
+          this.onGround = false; this.onPlatform = null; this.dropThrough = 10;
+          this.vel.y = 3; this.state = STATE.JUMP;
+        }
         else if (inp.down) { this.state = STATE.CROUCH; this.vel.x *= 0.6; }
         else if (inp.left || inp.right) {
           const dir = (inp.right ? 1 : 0) - (inp.left ? 1 : 0);
@@ -326,6 +342,7 @@ export class Fighter {
 
   _startAttack(kind, engine) {
     if (kind === 'throw') return this._startThrow(engine);
+    if (kind === 'special' && this.specialLock > 0) return; // spéciaux en recharge
 
     let move;
     if (kind === 'light') move = this.char.light;
@@ -353,6 +370,10 @@ export class Fighter {
     if (!this.comboChain) this.comboChain = 1;
     this.state = STATE.ATTACK;
     if (this.onGround) this.vel.x *= 0.5;
+    if (kind === 'special') {
+      this.specialCount++;
+      if (this.specialCount >= SPECIAL_SALVO) { this.specialLock = SPECIAL_LOCK_FRAMES; this.specialCount = 0; }
+    }
     engine.onAttackStart(this, kind, move);
   }
 
@@ -391,25 +412,58 @@ export class Fighter {
     }
   }
 
-  _physics() {
+  _physics(engine) {
+    const prevY = this.pos.y;
     if (!this.onGround) {
       this.vel.y += GRAVITY;
       if (this.vel.y > MAX_FALL) this.vel.y = MAX_FALL;
     }
     this.pos.x += this.vel.x;
     this.pos.y += this.vel.y;
+    if (this.dropThrough > 0) this.dropThrough--;
 
-    if (this.pos.y >= GROUND_Y) {
-      this.pos.y = GROUND_Y;
-      this.vel.y = 0;
-      if (!this.onGround) {
-        this.onGround = true;
-        this.landSquash = 8; // écrasement à la réception (juice)
-        if (this.state === STATE.JUMP) this.state = STATE.IDLE;
-        if (this.tumbling > 0) this.vel.x *= 0.5; // rebond mou après projection
+    const plats = (engine && engine.platforms) || [];
+
+    // Posé sur une plateforme : on tombe si on sort de sa largeur
+    if (this.onGround && this.onPlatform != null) {
+      const still = plats.find((p) => Math.abs(p.y - this.onPlatform) < 2 &&
+        this.pos.x > p.x - p.w / 2 && this.pos.x < p.x + p.w / 2);
+      if (!still) { this.onGround = false; this.onPlatform = null; }
+    }
+
+    // Atterrissage sur une plateforme (sens unique) : en chute, hors traversée
+    let landed = false;
+    if (this.vel.y >= 0 && this.dropThrough <= 0) {
+      for (const p of plats) {
+        if (prevY <= p.y + 2 && this.pos.y >= p.y &&
+            this.pos.x > p.x - p.w / 2 - 4 && this.pos.x < p.x + p.w / 2 + 4) {
+          this.pos.y = p.y; this.vel.y = 0;
+          if (!this.onGround) {
+            this.onGround = true; this.landSquash = 8;
+            if (this.state === STATE.JUMP) this.state = STATE.IDLE;
+            if (this.tumbling > 0) this.vel.x *= 0.5;
+          }
+          this.onPlatform = p.y; landed = true;
+          break;
+        }
       }
-    } else {
-      this.onGround = false;
+    }
+
+    // Sol
+    if (!landed) {
+      if (this.pos.y >= GROUND_Y) {
+        this.pos.y = GROUND_Y;
+        this.vel.y = 0;
+        if (!this.onGround) {
+          this.onGround = true;
+          this.landSquash = 8; // écrasement à la réception (juice)
+          if (this.state === STATE.JUMP) this.state = STATE.IDLE;
+          if (this.tumbling > 0) this.vel.x *= 0.5; // rebond mou après projection
+        }
+        this.onPlatform = null;
+      } else {
+        this.onGround = false;
+      }
     }
 
     if (this.onGround) {
@@ -443,8 +497,7 @@ export class Fighter {
       if (!this.onGround) return 'ignore';
       const dmg = Math.round(move.dmg * attackerForm.dmgMul * this.form.defMul);
       this.health = Math.max(0, this.health - dmg);
-      this.rage = Math.min(RAGE_MAX, this.rage + dmg * 0.7);
-      if (attacker) attacker.rage = Math.min(RAGE_MAX, attacker.rage + dmg * 0.4);
+      this.rage = Math.min(RAGE_MAX, this.rage + dmg * 0.9); // la rage monte quand on encaisse
       this.attack = null;
       this.comboChain = 0;
       this.state = STATE.HITSTUN;
@@ -487,8 +540,7 @@ export class Fighter {
     // --- Coup normal ---
     const dmg = Math.round(move.dmg * attackerForm.dmgMul * this.form.defMul);
     this.health = Math.max(0, this.health - dmg);
-    this.rage = Math.min(RAGE_MAX, this.rage + dmg * 0.75);
-    if (attacker) attacker.rage = Math.min(RAGE_MAX, attacker.rage + dmg * 0.35);
+    this.rage = Math.min(RAGE_MAX, this.rage + dmg * 0.9); // la rage monte quand on encaisse
 
     this.attack = null;
     this.comboChain = 0;

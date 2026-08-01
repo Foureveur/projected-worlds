@@ -57,3 +57,5 @@ export const BACKDASH_INVULN = 7;      // i-frames au début du dash arrière
 export const MAX_COMBO_CHAIN = 3;      // nb max de coups enchaînés par cancel
 export const GRAB_RANGE = 58;          // portée d'une projection
 export const COMBO_DISPLAY_FRAMES = 80; // durée d'affichage du compteur de combo
+export const SPECIAL_SALVO = 5;         // nb de spéciaux d'affilée avant recharge
+export const SPECIAL_LOCK_FRAMES = 110; // durée de la recharge forcée (~1.8 s)

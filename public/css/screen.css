@@ -22,10 +22,8 @@ html, body {
 
 #stage-wrap {
   position: relative;
-  width: 100%;
-  max-width: 100vw;
-  aspect-ratio: 16 / 9;
-  max-height: 100vh;
+  width: 100vw;
+  height: 100vh;
 }
 
 #game {
@@ -115,5 +113,13 @@ html, body {
 .status { margin-top: 12px; font-size: 8px; color: var(--accent); }
 .card.ready .status { color: var(--green); }
 
-.hint { margin-top: 26px; font-size: 8px; color: #6a5f90; line-height: 1.8; }
+.rounds { margin-top: 18px; display: flex; align-items: center; gap: 8px; justify-content: center; }
+.rounds-label { font-size: 9px; color: #9b8fd0; }
+.round-opt {
+  font-family: inherit; font-size: 15px; width: 42px; height: 42px; border-radius: 8px;
+  border: 2px solid #3a2a5a; background: var(--panel); color: #fff;
+}
+.round-opt.active { border-color: var(--accent); background: #241634; color: var(--accent); }
+
+.hint { margin-top: 22px; font-size: 8px; color: #6a5f90; line-height: 1.8; }
 .hint b { color: #9b8fd0; }

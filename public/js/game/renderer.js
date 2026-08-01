@@ -1,6 +1,6 @@
 /**
  * Renderer — dessine tout le jeu en pixel-art procédural (aucune image à
- * charger). On rend dans un buffer VIEW_W x VIEW_H puis on l'agrandit en
+ * charger). On rend dans un buffer this.W x this.H puis on l'agrandit en
  * CSS avec image-rendering: pixelated => rendu bien rétro et net.
  *
  * Repère "local" d'un combattant : origine aux pieds, +x vers l'avant
@@ -8,25 +8,38 @@
  * -> écran via la caméra.
  */
 
-import { VIEW_W, VIEW_H, STAGE_W, GROUND_Y, STATE, RAGE_MAX, RAGE_THRESHOLDS, ROUNDS_TO_WIN, ROUND_TIME } from './constants.js';
-
-const GROUND_SCREEN_Y = Math.round(VIEW_H * 0.86);
+import { STAGE_W, GROUND_Y, STATE, RAGE_MAX, RAGE_THRESHOLDS, ROUND_TIME } from './constants.js';
 
 export class Renderer {
   constructor(canvas) {
     this.canvas = canvas;
-    this.canvas.width = VIEW_W;
-    this.canvas.height = VIEW_H;
     this.ctx = canvas.getContext('2d');
     this.ctx.imageSmoothingEnabled = false;
     this.t = 0;
+    this.W = 640; this.H = 360; this.groundY = Math.round(this.H * 0.86);
+    this.resize();
+  }
+
+  // Adapte la résolution interne au ratio réel de l'écran : plus de bandes
+  // noires ni de déformation. Hauteur rétro fixe (360), largeur variable.
+  resize() {
+    const cw = this.canvas.clientWidth || window.innerWidth || 640;
+    const ch = this.canvas.clientHeight || window.innerHeight || 360;
+    const aspect = cw / Math.max(1, ch);
+    this.H = 360;
+    this.W = Math.max(480, Math.min(1000, Math.round(this.H * aspect)));
+    this.canvas.width = this.W;
+    this.canvas.height = this.H;
+    this.ctx.imageSmoothingEnabled = false;
+    this.groundY = Math.round(this.H * 0.86);
+    return this.W;
   }
 
   // monde -> écran
   w2s(cam, wx, wy) {
     return {
       x: (wx - cam.x) * cam.zoom,
-      y: GROUND_SCREEN_Y - (GROUND_Y - wy) * cam.zoom,
+      y: this.groundY - (GROUND_Y - wy) * cam.zoom,
     };
   }
 
@@ -35,7 +48,7 @@ export class Renderer {
     const ctx = this.ctx;
     const cam = engine.camera;
 
-    ctx.clearRect(0, 0, VIEW_W, VIEW_H);
+    ctx.clearRect(0, 0, this.W, this.H);
 
     // Avant la configuration (salon), on dessine juste le décor.
     if (!engine.fighters.p1 || !engine.fighters.p2) {
@@ -53,6 +66,7 @@ export class Renderer {
 
     this._drawBackground(ctx, cam);
     this._drawGround(ctx, cam);
+    this._drawPlatforms(ctx, cam, engine);
 
     // Ombres
     for (const slot of ['p1', 'p2']) this._drawShadow(ctx, cam, engine.fighters[slot]);
@@ -69,7 +83,7 @@ export class Renderer {
     // Flash plein écran
     if (engine.flash > 0) {
       ctx.fillStyle = `rgba(255,255,255,${engine.flash / 16})`;
-      ctx.fillRect(0, 0, VIEW_W, VIEW_H);
+      ctx.fillRect(0, 0, this.W, this.H);
     }
 
     this._drawHUD(ctx, engine);
@@ -82,12 +96,12 @@ export class Renderer {
   // ------------------------------------------------------------------
   _drawBackground(ctx, cam) {
     // Mur en dégradé
-    const g = ctx.createLinearGradient(0, 0, 0, GROUND_SCREEN_Y);
+    const g = ctx.createLinearGradient(0, 0, 0, this.groundY);
     g.addColorStop(0, '#3a2350');
     g.addColorStop(0.55, '#5a2f5e');
     g.addColorStop(1, '#7a3f55');
     ctx.fillStyle = g;
-    ctx.fillRect(0, 0, VIEW_W, GROUND_SCREEN_Y + 2);
+    ctx.fillRect(0, 0, this.W, this.groundY + 2);
 
     const px = -cam.x * cam.zoom * 0.3; // parallaxe lointaine
 
@@ -117,39 +131,39 @@ export class Renderer {
     ctx.moveTo(winX, winY + winH / 2); ctx.lineTo(winX + winW, winY + winH / 2);
     ctx.stroke();
 
-    // Cadres photo
-    const px2 = -cam.x * cam.zoom * 0.5;
-    this._frame(ctx, px2 + 300, 40, 40, 52, '#c9a24b', '#7a3ea0');
-    this._frame(ctx, px2 + 360, 60, 34, 40, '#c9a24b', '#2f6fb0');
-    this._frame(ctx, px2 + 520, 46, 44, 54, '#c9a24b', '#3a7a4a');
-
-    // Étagère
-    ctx.fillStyle = '#4a2f22';
-    ctx.fillRect(px2 + 700, 120, 160, 8);
   }
 
-  _frame(ctx, x, y, w, h, border, inner) {
-    ctx.fillStyle = border;
-    ctx.fillRect(x, y, w, h);
-    ctx.fillStyle = inner;
-    ctx.fillRect(x + 4, y + 4, w - 8, h - 8);
+  // Plateformes traversables (planches en bois)
+  _drawPlatforms(ctx, cam, engine) {
+    const plats = engine.platforms || [];
+    for (const p of plats) {
+      const left = this.w2s(cam, p.x - p.w / 2, p.y);
+      const right = this.w2s(cam, p.x + p.w / 2, p.y);
+      const w = right.x - left.x, h = 11 * cam.zoom;
+      ctx.fillStyle = '#5a3b26'; ctx.fillRect(left.x, left.y, w, h);
+      ctx.fillStyle = '#7a5236'; ctx.fillRect(left.x, left.y, w, 3);
+      ctx.fillStyle = '#31200f'; ctx.fillRect(left.x, left.y + h - 3, w, 3);
+      ctx.fillStyle = '#31200f';
+      ctx.fillRect(left.x + 8, left.y + h, 5, 15 * cam.zoom);
+      ctx.fillRect(right.x - 13, left.y + h, 5, 15 * cam.zoom);
+    }
   }
 
   _drawGround(ctx, cam) {
     // Tapis / plancher
     ctx.fillStyle = '#3a231c';
-    ctx.fillRect(0, GROUND_SCREEN_Y, VIEW_W, VIEW_H - GROUND_SCREEN_Y);
+    ctx.fillRect(0, this.groundY, this.W, this.H - this.groundY);
     ctx.fillStyle = '#4d2f24';
-    ctx.fillRect(0, GROUND_SCREEN_Y, VIEW_W, 5);
+    ctx.fillRect(0, this.groundY, this.W, 5);
     // Lattes de parquet
     ctx.strokeStyle = 'rgba(0,0,0,0.25)';
     ctx.lineWidth = 2;
     const step = 46 * cam.zoom;
     const off = (-cam.x * cam.zoom) % step;
-    for (let x = off; x < VIEW_W; x += step) {
+    for (let x = off; x < this.W; x += step) {
       ctx.beginPath();
-      ctx.moveTo(x, GROUND_SCREEN_Y + 6);
-      ctx.lineTo(x, VIEW_H);
+      ctx.moveTo(x, this.groundY + 6);
+      ctx.lineTo(x, this.H);
       ctx.stroke();
     }
   }
@@ -162,7 +176,7 @@ export class Renderer {
     const airFactor = Math.max(0.4, 1 - (GROUND_Y - f.pos.y) / 200);
     ctx.fillStyle = 'rgba(0,0,0,0.28)';
     ctx.beginPath();
-    ctx.ellipse(s.x, GROUND_SCREEN_Y + 2, (w * 0.7) * airFactor, 5 * cam.zoom * airFactor, 0, 0, Math.PI * 2);
+    ctx.ellipse(s.x, this.groundY + 2, (w * 0.7) * airFactor, 5 * cam.zoom * airFactor, 0, 0, Math.PI * 2);
     ctx.fill();
   }
 
@@ -513,8 +527,8 @@ export class Renderer {
   _drawHUD(ctx, engine) {
     const p1 = engine.fighters.p1, p2 = engine.fighters.p2;
     if (!p1 || !p2) return;
-    this._playerHUD(ctx, p1, 'left');
-    this._playerHUD(ctx, p2, 'right');
+    this._playerHUD(ctx, p1, 'left', engine.roundsToWin);
+    this._playerHUD(ctx, p2, 'right', engine.roundsToWin);
 
     // Chrono
     ctx.save();
@@ -523,18 +537,18 @@ export class Renderer {
     ctx.textBaseline = 'middle';
     const tl = String(engine.timeLeft).padStart(2, '0');
     ctx.fillStyle = '#1a1030';
-    ctx.fillRect(VIEW_W / 2 - 34, 8, 68, 40);
+    ctx.fillRect(this.W / 2 - 34, 8, 68, 40);
     ctx.strokeStyle = '#f5d90a'; ctx.lineWidth = 2;
-    ctx.strokeRect(VIEW_W / 2 - 34, 8, 68, 40);
+    ctx.strokeRect(this.W / 2 - 34, 8, 68, 40);
     ctx.fillStyle = engine.timeLeft <= 10 ? '#ff4a4a' : '#f5d90a';
     ctx.font = 'bold 26px monospace';
-    ctx.fillText(tl, VIEW_W / 2, 30);
+    ctx.fillText(tl, this.W / 2, 30);
     ctx.restore();
   }
 
-  _playerHUD(ctx, f, side) {
+  _playerHUD(ctx, f, side, roundsToWin = 2) {
     const barW = 250, barH = 20, pad = 14;
-    const x = side === 'left' ? pad : VIEW_W - pad - barW;
+    const x = side === 'left' ? pad : this.W - pad - barW;
     const y = 14;
     const hpPct = Math.max(0, f.health) / 100;
 
@@ -592,7 +606,7 @@ export class Renderer {
     ctx.fillText(`${f.char.formNames[f.formIndex]}`, tx, ry + rh + 27);
 
     // Pastilles de rounds gagnés
-    for (let i = 0; i < ROUNDS_TO_WIN; i++) {
+    for (let i = 0; i < roundsToWin; i++) {
       const cxp = side === 'left' ? x + 6 + i * 16 : x + barW - 6 - i * 16;
       ctx.beginPath();
       ctx.arc(cxp, y - 12, 5, 0, Math.PI * 2);
@@ -611,7 +625,7 @@ export class Renderer {
     ctx.save();
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    const cx = VIEW_W / 2, cy = engine.phase === 'matchEnd' ? VIEW_H / 2 : VIEW_H * 0.38;
+    const cx = this.W / 2, cy = engine.phase === 'matchEnd' ? this.H / 2 : this.H * 0.38;
 
     // pop d'apparition
     const age = a.timerStart ? 1 : 0;
@@ -658,7 +672,7 @@ export class Renderer {
       const slot = side === 'left' ? 'p1' : 'p2';
       const c = engine.combo[slot];
       if (!c || c.count < 2) continue;
-      const x = side === 'left' ? 96 : VIEW_W - 96;
+      const x = side === 'left' ? 96 : this.W - 96;
       const y = 150;
       const pop = Math.min(1, c.timer / 50);
       ctx.save();

@@ -237,6 +237,7 @@ function pushState(slot) {
     formName: f.char.formNames[f.formIndex],
     charName: f.char.name,
     specialName: f.char.specials[f.formIndex].name,
+    specialLocked: f.specialLock > 0,
     phase: engine.phase,
   });
 }
@@ -281,6 +282,20 @@ requestAnimationFrame(frame);
 // Exposé pour le debug depuis la console du navigateur (ex: window.__engine)
 window.__engine = engine;
 window.__renderer = renderer;
+
+// Résolution dynamique : le canvas remplit l'écran, sans bandes ni déformation
+function handleResize() { engine.viewW = renderer.resize(); }
+window.addEventListener('resize', handleResize);
+window.addEventListener('orientationchange', () => setTimeout(handleResize, 150));
+handleResize();
+
+// Sélecteur du nombre de manches gagnantes (sur l'écran de jeu)
+document.querySelectorAll('.round-opt').forEach((b) => {
+  b.addEventListener('click', () => {
+    engine.roundsToWin = Number(b.dataset.rounds);
+    document.querySelectorAll('.round-opt').forEach((o) => o.classList.toggle('active', o === b));
+  });
+});
 
 // ------------------------------------------------------------------
 // Clavier de secours (test à 2 sur un PC)
