@@ -263,6 +263,27 @@ export class Renderer {
     const armY = bodyTop - 8 + bob - lean * 10;
     const id = f.char.sprite || f.char.id;
 
+    // --- Squash & stretch + lunge d'attaque (juice) ---
+    let lunge = 0;
+    if (f.attack && !isThrow) {
+      const ph = f.attack.phase;
+      lunge = ph === 'startup' ? -2 : ph === 'active' ? 5 : 1.5;
+    }
+    let sqx = 1, sqy = 1;
+    if (!f.onGround) {
+      const st = Math.max(-0.12, Math.min(0.16, -f.vel.y * 0.011));
+      sqy = 1 + st; sqx = 1 - st * 0.7;
+    }
+    if (f.landSquash > 0) {
+      const q = f.landSquash / 8;
+      sqy = 1 - 0.24 * q; sqx = 1 + 0.24 * q;
+    }
+    feet.x += face * lunge * S;
+    ctx.save();
+    ctx.translate(feet.x, feet.y);
+    ctx.scale(sqx, sqy);
+    ctx.translate(-feet.x, -feet.y);
+
     // --- Jambes ---
     const legSwing = legPhase * 6;
     part(-6 + tuck * 5, legTop / 2 + bob, 10, legTop, clothSh);
@@ -358,6 +379,8 @@ export class Renderer {
       part(21, bodyTop - 6 + bob, 9, 36, '#8fd6ff');
       ctx.restore();
     }
+
+    ctx.restore(); // fin du squash & stretch
   }
 
   _drawWeapon(ctx, part, f, x, y) {

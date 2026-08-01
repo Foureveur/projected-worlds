@@ -37,6 +37,8 @@ export class Engine {
     this.camera = { x: 0, zoom: 1 };
     this.winnerSlot = null;
     this.flash = 0;
+    this.slowmo = 0;      // ralenti dramatique (KO)
+    this._smSkip = false;
     // Compteur de combos par attaquant
     this.combo = { p1: { count: 0, timer: 0 }, p2: { count: 0, timer: 0 } };
   }
@@ -73,6 +75,12 @@ export class Engine {
   // Boucle fixe
   // ------------------------------------------------------------------
   update() {
+    // Ralenti : on saute une frame de sim sur deux (mi-vitesse)
+    if (this.slowmo > 0) {
+      this.slowmo--;
+      this._smSkip = !this._smSkip;
+      if (this._smSkip) { this._updateCamera(); return; }
+    }
     if (this.shake > 0) this.shake *= 0.86;
     if (this.flash > 0) this.flash--;
     this._updateCombos();
@@ -88,6 +96,10 @@ export class Engine {
 
     p1.update(p2, this, active);
     p2.update(p1, this, active);
+
+    // Poussière à la réception d'un saut
+    if (p1.landSquash === 8) this._spawnLandDust(p1);
+    if (p2.landSquash === 8) this._spawnLandDust(p2);
 
     if (active) {
       this._separateBodies(p1, p2);
@@ -274,6 +286,30 @@ export class Engine {
     }
   }
 
+  // Gerbe d'étincelles projetée dans le sens du coup (dir = -1 | 1)
+  _spawnSparkDir(x, y, dir, kind, color, count = 8) {
+    for (let i = 0; i < count; i++) {
+      const spd = 2 + Math.random() * 3.5;
+      this.effects.push({
+        x, y,
+        vx: dir * spd + (Math.random() - 0.5) * 1.8,
+        vy: (Math.random() - 0.72) * 3.2,
+        age: 0, life: 12 + (i % 6), kind, color, size: kind === 'heavy' ? 4 : 3,
+      });
+    }
+  }
+
+  _spawnLandDust(f) {
+    for (let i = 0; i < 5; i++) {
+      const s = i / 4 - 0.5;
+      this.effects.push({
+        x: f.pos.x + s * 16, y: f.pos.y - 2,
+        vx: s * 2.4, vy: -0.6 - Math.random(),
+        age: 0, life: 12 + (i % 4), kind: 'dust', color: '#cbb89a', size: 2,
+      });
+    }
+  }
+
   _updateCombos() {
     for (const slot of ['p1', 'p2']) {
       const c = this.combo[slot];
@@ -323,7 +359,7 @@ export class Engine {
     const cx = (defender.pos.x + (attacker ? attacker.pos.x : defender.pos.x)) / 2;
     const cy = defender.pos.y - defender.char.body.h * defender.scale * 0.55;
     const heavy = dmg >= 11;
-    this._spawnSpark(cx, cy, heavy ? 'heavy' : 'light', '#fff4b0', heavy ? 12 : 7);
+    this._spawnSparkDir(cx, cy, dir, heavy ? 'heavy' : 'light', '#fff4b0', heavy ? 12 : 7);
     this.shake = Math.max(this.shake, heavy ? 10 : 5);
     this.hitStop = heavy ? 5 : 3;
     this.hooks.onEvent('hit', { slot: defender.slot, atk: attacker && attacker.slot, heavy, dmg });
@@ -369,10 +405,11 @@ export class Engine {
   }
 
   onKO(fighter) {
-    this.shake = Math.max(this.shake, 16);
-    this.hitStop = 8;
-    this.flash = 6;
-    this._spawnSpark(fighter.pos.x, fighter.pos.y - 40, 'heavy', '#ff5a5a', 16);
+    this.shake = Math.max(this.shake, 18);
+    this.hitStop = 10;
+    this.flash = 8;
+    this.slowmo = 48; // ralenti dramatique sur le coup fatal
+    this._spawnSpark(fighter.pos.x, fighter.pos.y - 40, 'heavy', '#ff5a5a', 18);
   }
 
   onTransform(fighter) {

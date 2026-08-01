@@ -59,6 +59,7 @@ export class Fighter {
     this.blockFlash = 0;  // effet visuel de garde
     this.hitFlash = 0;    // clignotement quand touché
     this.tumbling = 0;    // roule-boule après une projection
+    this.landSquash = 0;  // écrasement à l'atterrissage (juice)
     this.animTime = 0;    // horloge pour les animations de rendu
     this.wins = 0;
   }
@@ -109,6 +110,7 @@ export class Fighter {
     this.armorActive = false;
     this.invuln = 0;
     this.tumbling = 0;
+    this.landSquash = 0;
     this.onGround = true;
     for (const k in this.input) this.input[k] = false;
   }
@@ -167,6 +169,7 @@ export class Fighter {
     if (this.blockFlash > 0) this.blockFlash--;
     if (this.hitFlash > 0) this.hitFlash--;
     if (this.tumbling > 0) this.tumbling--;
+    if (this.landSquash > 0) this.landSquash--;
 
     if (!active) { this._physics(); this._clampStage(); return; }
 
@@ -401,6 +404,7 @@ export class Fighter {
       this.vel.y = 0;
       if (!this.onGround) {
         this.onGround = true;
+        this.landSquash = 8; // écrasement à la réception (juice)
         if (this.state === STATE.JUMP) this.state = STATE.IDLE;
         if (this.tumbling > 0) this.vel.x *= 0.5; // rebond mou après projection
       }
