@@ -142,6 +142,7 @@ function maybeStart() {
 
 function startGame() {
   audio.init();
+  audio.startMusic('battle');
   mode = 'playing';
   paused = false;
   $('#lobby').classList.add('hidden');
@@ -153,6 +154,7 @@ function startGame() {
 }
 
 function restartMatch() {
+  audio.startMusic('battle');
   engine.rematch();
   broadcastState(true);
 }
@@ -161,11 +163,26 @@ function restartMatch() {
 // Vibrations & état vers les manettes
 // ------------------------------------------------------------------
 function handleHaptics(type, data) {
-  if (type === 'hit') buzz(data.slot, data.heavy ? [40] : [18]);
-  else if (type === 'block') buzz(data.slot, [10]);
-  else if (type === 'transform') { buzz(data.slot, [30, 40, 60]); pushState(data.slot); }
-  else if (type === 'ko') buzz(data.slot, [80]);
-  else if (type === 'match-end') buzz(data.slot, [40, 60, 40, 60]);
+  if (type === 'hit') {
+    buzz(data.slot, data.heavy ? [45] : [20]);           // la victime encaisse
+    if (data.atk) buzz(data.atk, data.heavy ? [12] : [6]); // l'attaquant sent le contact
+  } else if (type === 'block') {
+    buzz(data.slot, [8]);
+  } else if (type === 'throw') {
+    buzz(data.slot, [70, 30, 90]);                        // grosse projection
+    if (data.atk) buzz(data.atk, [15]);
+  } else if (type === 'armor') {
+    buzz(data.slot, [12, 15]);                            // clang d'armure
+  } else if (type === 'dash') {
+    buzz(data.slot, [7]);
+  } else if (type === 'transform') {
+    buzz(data.slot, [30, 40, 60, 40, 90]);               // montée en rage
+    pushState(data.slot);
+  } else if (type === 'ko') {
+    buzz(data.slot, [90]);
+  } else if (type === 'match-end') {
+    buzz(data.slot, [40, 60, 40, 60, 40, 120]);
+  }
 }
 
 function buzz(slot, pattern) {
@@ -212,10 +229,18 @@ function frame(now) {
   }
   renderer.render(engine);
 
-  // Envoi périodique de l'état aux manettes (~12 Hz)
-  if (mode === 'playing' && !paused) {
-    stateTick++;
-    if (stateTick % 5 === 0) broadcastState();
+  if (mode === 'playing') {
+    // Intensité musicale = niveau de rage max des deux combattants
+    const p1 = engine.fighters.p1, p2 = engine.fighters.p2;
+    if (p1 && p2) audio.setMusicIntensity(Math.max(p1.formIndex, p2.formIndex) / 2);
+    // Musique plus calme à la fin du match
+    if (engine.phase === 'matchEnd' && audio.music.track === 'battle') audio.startMusic('menu');
+
+    // Envoi périodique de l'état aux manettes (~12 Hz)
+    if (!paused) {
+      stateTick++;
+      if (stateTick % 5 === 0) broadcastState();
+    }
   }
 }
 requestAnimationFrame(frame);
@@ -238,6 +263,7 @@ const KEYMAP = {
 const keyHeld = {};
 window.addEventListener('keydown', (e) => {
   audio.init();
+  if (e.code === 'KeyM') { const muted = audio.toggleMute(); showToast(muted ? '🔇 Son coupé' : '🔊 Son activé'); return; }
   const m = KEYMAP[e.code];
   if (!m) {
     if (e.code === 'Enter' && engine.phase === 'matchEnd') restartMatch();
@@ -265,13 +291,33 @@ function forceKeyboardStart() {
   keyboardStarted = true;
   selection.p1.connected = selection.p2.connected = true;
   audio.init();
+  audio.startMusic('battle');
   mode = 'playing';
   paused = false;
   $('#lobby').classList.add('hidden');
   engine.configure(CHARACTER_LIST[selection.p1.charIdx].id, CHARACTER_LIST[selection.p2.charIdx].id);
 }
 
-// Débloque l'audio au premier clic aussi
-window.addEventListener('pointerdown', () => audio.init(), { once: true });
+// Petit toast d'info (mute, etc.)
+let toastTimer = null;
+function showToast(text) {
+  let el = $('#toast');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'toast';
+    el.style.cssText = 'position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#1a1030;color:#f5d90a;padding:10px 18px;border-radius:8px;font-family:monospace;font-size:14px;z-index:50;border:2px solid #f5d90a;';
+    document.body.appendChild(el);
+  }
+  el.textContent = text;
+  el.style.display = 'block';
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { el.style.display = 'none'; }, 1400);
+}
+
+// Débloque l'audio + lance la musique du menu au premier contact
+window.addEventListener('pointerdown', () => {
+  audio.init();
+  if (mode === 'lobby') audio.startMusic('menu');
+}, { once: true });
 
 connect();

@@ -52,6 +52,11 @@ const meregrand = {
     dmg: 12, hitstun: 20, kb: { x: 7, y: -6 },
     box: { fx: 36, fy: 42, hw: 24, hh: 20 },
   },
+  // Projection (Garde + Coup au corps-à-corps) : imparable, bat la garde.
+  throw: {
+    name: 'Croche-patte de Mémé', type: 'grab', startup: 4, active: 2, recovery: 22,
+    dmg: 15, hitstun: 42, kb: { x: 11, y: -9 },
+  },
   specials: [
     { name: 'Bonbon collant', type: 'projectile', startup: 10, recovery: 20,
       dmg: 8, hitstun: 16, kb: { x: 5, y: -3 },
@@ -59,9 +64,10 @@ const meregrand = {
     { name: 'Aiguilles à tricoter', type: 'projectile', startup: 8, recovery: 16,
       dmg: 10, hitstun: 14, kb: { x: 6, y: -2 },
       proj: { speed: 8.5, w: 22, h: 5, life: 80, color: '#cfd6e6', shape: 'needle' } },
-    { name: 'Hurlement du Loup', type: 'projectile', startup: 12, recovery: 24,
-      dmg: 17, hitstun: 30, kb: { x: 12, y: -7 },
-      proj: { speed: 6, w: 34, h: 64, life: 50, color: '#ff2b4a', shape: 'howl' } },
+    // Furie : super avec armure (encaisse un coup pendant l'armement).
+    { name: 'Hurlement du Loup', type: 'projectile', super: true, armor: true,
+      startup: 13, recovery: 26, dmg: 20, hitstun: 32, kb: { x: 13, y: -8 },
+      proj: { speed: 6, w: 36, h: 66, life: 52, color: '#ff2b4a', shape: 'howl' } },
   ],
 };
 
@@ -94,6 +100,11 @@ const padre = {
     dmg: 12, hitstun: 18, kb: { x: 6, y: -5 },
     box: { fx: 42, fy: 46, hw: 28, hh: 12 },
   },
+  // Projection (Garde + Coup au corps-à-corps) : imparable, bat la garde.
+  throw: {
+    name: 'Suplex paternel', type: 'grab', startup: 4, active: 2, recovery: 22,
+    dmg: 16, hitstun: 42, kb: { x: 12, y: -10 },
+  },
   specials: [
     { name: 'Télécommande', type: 'projectile', startup: 9, recovery: 18,
       dmg: 8, hitstun: 14, kb: { x: 5, y: -2 },
@@ -101,9 +112,10 @@ const padre = {
     { name: 'Pantoufle volante', type: 'projectile', startup: 8, recovery: 15,
       dmg: 10, hitstun: 14, kb: { x: 6, y: -3 },
       proj: { speed: 9.5, w: 20, h: 12, life: 78, color: '#7a4a2a', shape: 'slipper' } },
-    { name: 'Barbecue Furioso', type: 'projectile', startup: 11, recovery: 22,
-      dmg: 18, hitstun: 26, kb: { x: 11, y: -6 },
-      proj: { speed: 5.2, w: 32, h: 42, life: 56, color: '#ff7a1a', shape: 'fire' } },
+    // Furie : super avec armure (encaisse un coup pendant l'armement).
+    { name: 'Barbecue Furioso', type: 'projectile', super: true, armor: true,
+      startup: 12, recovery: 24, dmg: 21, hitstun: 28, kb: { x: 12, y: -7 },
+      proj: { speed: 5.2, w: 34, h: 44, life: 58, color: '#ff7a1a', shape: 'fire' } },
   ],
 };
 

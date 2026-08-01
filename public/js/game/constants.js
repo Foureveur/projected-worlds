@@ -42,7 +42,18 @@ export const STATE = {
   CROUCH: 'crouch',
   BLOCK: 'block',
   ATTACK: 'attack',
+  DASH: 'dash',
   HITSTUN: 'hitstun',
   KO: 'ko',
   TRANSFORM: 'transform',
 };
+
+// Mécaniques avancées
+export const DOUBLE_TAP_FRAMES = 15;   // fenêtre pour le double-appui (dash)
+export const DASH_FRAMES = 13;         // durée d'un dash
+export const DASH_SPEED = 8.6;         // vitesse d'un dash avant
+export const BACKDASH_SPEED = 7.2;     // vitesse d'un dash arrière
+export const BACKDASH_INVULN = 7;      // i-frames au début du dash arrière
+export const MAX_COMBO_CHAIN = 3;      // nb max de coups enchaînés par cancel
+export const GRAB_RANGE = 58;          // portée d'une projection
+export const COMBO_DISPLAY_FRAMES = 80; // durée d'affichage du compteur de combo

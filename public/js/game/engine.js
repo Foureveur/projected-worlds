@@ -37,6 +37,8 @@ export class Engine {
     this.camera = { x: 0, zoom: 1 };
     this.winnerSlot = null;
     this.flash = 0;
+    // Compteur de combos par attaquant
+    this.combo = { p1: { count: 0, timer: 0 }, p2: { count: 0, timer: 0 } };
   }
 
   configure(charP1Id, charP2Id) {
@@ -73,6 +75,7 @@ export class Engine {
   update() {
     if (this.shake > 0) this.shake *= 0.86;
     if (this.flash > 0) this.flash--;
+    this._updateCombos();
     this._updateEffects();
 
     // Hit-stop : on gèle tout brièvement pour donner du poids aux impacts.
@@ -271,9 +274,18 @@ export class Engine {
     }
   }
 
+  _updateCombos() {
+    for (const slot of ['p1', 'p2']) {
+      const c = this.combo[slot];
+      if (c.timer > 0) { c.timer--; if (c.timer === 0) c.count = 0; }
+    }
+  }
+
   _updateEffects() {
     for (const e of this.effects) {
-      e.x += e.vx; e.y += e.vy; e.vy += 0.25; e.age++;
+      e.x += e.vx; e.y += e.vy;
+      if (e.kind !== 'dust') e.vy += 0.25; else e.vy += 0.05;
+      e.age++;
     }
     this.effects = this.effects.filter((e) => e.age < e.life);
   }
@@ -303,13 +315,48 @@ export class Engine {
   }
 
   onHit(defender, attacker, move, dmg, dir) {
+    if (attacker) {
+      const c = this.combo[attacker.slot];
+      c.count = c.timer > 0 ? c.count + 1 : 1;
+      c.timer = 50;
+    }
     const cx = (defender.pos.x + (attacker ? attacker.pos.x : defender.pos.x)) / 2;
     const cy = defender.pos.y - defender.char.body.h * defender.scale * 0.55;
     const heavy = dmg >= 11;
     this._spawnSpark(cx, cy, heavy ? 'heavy' : 'light', '#fff4b0', heavy ? 12 : 7);
     this.shake = Math.max(this.shake, heavy ? 10 : 5);
     this.hitStop = heavy ? 5 : 3;
-    this.hooks.onEvent('hit', { slot: defender.slot, heavy, dmg });
+    this.hooks.onEvent('hit', { slot: defender.slot, atk: attacker && attacker.slot, heavy, dmg });
+  }
+
+  onThrow(defender, attacker, dmg, dir) {
+    const cx = defender.pos.x;
+    const cy = defender.pos.y - defender.char.body.h * defender.scale * 0.5;
+    this._spawnSpark(cx, cy, 'heavy', '#ffd24a', 14);
+    this.shake = Math.max(this.shake, 13);
+    this.hitStop = 6;
+    if (attacker) { const c = this.combo[attacker.slot]; c.count = 0; c.timer = 0; }
+    this.hooks.onEvent('throw', { slot: defender.slot, atk: attacker && attacker.slot, dmg });
+  }
+
+  onArmor(fighter, dir) {
+    const cx = fighter.pos.x + dir * 10;
+    const cy = fighter.pos.y - fighter.char.body.h * fighter.scale * 0.55;
+    this._spawnSpark(cx, cy, 'block', '#ffd24a', 8);
+    this.shake = Math.max(this.shake, 5);
+    this.hitStop = 3;
+    this.hooks.onEvent('armor', { slot: fighter.slot });
+  }
+
+  onDash(fighter, forward) {
+    for (let i = 0; i < 4; i++) {
+      this.effects.push({
+        x: fighter.pos.x - fighter.facing * (6 + i * 4), y: fighter.pos.y - 2,
+        vx: -fighter.facing * (0.5 + i * 0.3), vy: -0.4,
+        age: 0, life: 10 + i * 2, kind: 'dust', color: '#c9b89a', size: 2,
+      });
+    }
+    this.hooks.onEvent('dash', { slot: fighter.slot, forward });
   }
 
   onBlock(defender, dir) {

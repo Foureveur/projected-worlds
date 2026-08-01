@@ -66,7 +66,22 @@ Puis :
 | ⚡ SPÉCIAL | Coup spécial (change selon la forme de rage !) |
 | 🛡 GARDE | Se protéger (maintenir) — réduit les dégâts |
 
+**Coups avancés :**
+
+| Commande | Coup |
+|----------|------|
+| 🛡 GARDE + 👊 COUP (au corps-à-corps) | **Projection** — imparable, bat la garde ! |
+| Double ◀◀ ou ▶▶ | **Dash** avant / arrière (le dash arrière esquive) |
+| ▼ BAS + 👊/🦶 | Coup **bas** (accroupi) |
+| 👊/🦶 en l'air | Coup **sauté** |
+| Enchaîner coup léger → lourd → spécial | **Combos** (cancels) |
+| ⚡ SPÉCIAL en **furie** | **Super** — gros dégâts + armure (encaisse un coup) |
+
 En fin de match, **⚡ SPÉCIAL** relance une revanche.
+
+🔊 Sur l'écran de jeu, la touche **M** coupe/active le son.
+📱 Sur iPhone/iPad : **Partager → « Sur l'écran d'accueil »** installe la
+manette comme une vraie app plein écran (PWA).
 
 ### ⌨️ Clavier de secours (pour tester sans téléphone)
 
@@ -114,7 +129,7 @@ police obligatoire : personnages, décor et sons sont **générés en code**).
 | QR code | `qrcode` (généré à la volée) |
 | Rendu du jeu | Canvas 2D en pixel-art procédural |
 | Boucle de jeu | Pas fixe 60 Hz (déterministe) |
-| Son | Web Audio API (bruitages 8-bit synthétisés) |
+| Son | Web Audio API : bruitages 8-bit **et** musique chiptune, tout généré en code (intensité qui monte avec la rage) |
 | Manette | HTML/CSS/JS, multitouch natif, vibrations |
 
 ### Pourquoi c'est réactif

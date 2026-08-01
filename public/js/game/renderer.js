@@ -73,6 +73,7 @@ export class Renderer {
     }
 
     this._drawHUD(ctx, engine);
+    this._drawCombo(ctx, engine);
     this._drawAnnounce(ctx, engine);
   }
 
@@ -173,34 +174,25 @@ export class Renderer {
     const S = f.scale * cam.zoom;
     const pal = f.char.palette;
     const aura = f.char.formAura[f.formIndex];
-
-    // Anim de base
     const t = f.animTime;
-    let bob = 0, lean = 0, legPhase = 0, crouch = 0, armExtend = 0, koRot = 0, tuck = 0;
-
-    if (f.state === STATE.WALK) { legPhase = Math.sin(t * 0.35); bob = Math.abs(Math.sin(t * 0.35)) * 2; }
-    else if (f.state === STATE.IDLE || f.state === STATE.BLOCK) { bob = Math.sin(t * 0.08) * 1.2; }
-    else if (f.state === STATE.JUMP) { tuck = 1; }
-    else if (f.state === STATE.CROUCH) { crouch = 1; }
-    else if (f.state === STATE.HITSTUN) { lean = -0.35; }
-    else if (f.state === STATE.KO) { koRot = 1; }
-
-    // Extension du bras pendant la phase active d'une attaque
-    if (f.attack) {
-      const ph = f.attack.phase;
-      if (ph === 'active') armExtend = 1;
-      else if (ph === 'startup') armExtend = 0.4;
-      else armExtend = 0.5;
-    }
+    const face = f.facing;
+    const feet = this.w2s(cam, f.pos.x, f.pos.y);
 
     // Aura de rage (derrière le perso)
     if (aura) this._drawAura(ctx, cam, f, aura, S);
 
-    // Position des pieds (origine locale)
-    const feet = this.w2s(cam, f.pos.x, f.pos.y);
-    const face = f.facing;
+    // Traînées de dash
+    if (f.state === STATE.DASH) {
+      ctx.save();
+      ctx.globalAlpha = 0.2;
+      ctx.fillStyle = aura || '#cfd6e6';
+      for (let i = 1; i <= 3; i++) {
+        ctx.fillRect(feet.x - face * i * 8 * S - 4 * S, feet.y - 66 * S, 4 * S, 56 * S);
+      }
+      ctx.restore();
+    }
 
-    // Helper : dessine un rectangle en coords locales (cx avant, cy haut)
+    // Helper : rectangle en coords locales (cx=avant, cy=haut depuis les pieds)
     const part = (cxL, cyL, w, h, color, r = 0) => {
       const sx = feet.x + face * cxL * S;
       const sy = feet.y - cyL * S;
@@ -209,24 +201,33 @@ export class Renderer {
       if (r > 0) this._roundRect(ctx, sx - pw / 2, sy - ph / 2, pw, ph, r * S);
       else ctx.fillRect(Math.round(sx - pw / 2), Math.round(sy - ph / 2), Math.ceil(pw), Math.ceil(ph));
     };
+    // Triangle pointe en haut (oreilles de loup)
+    const tri = (cxL, cyL, w, h, color) => {
+      const sx = feet.x + face * cxL * S, sy = feet.y - cyL * S;
+      ctx.fillStyle = color; ctx.beginPath();
+      ctx.moveTo(sx, sy - h * S); ctx.lineTo(sx - w * S / 2, sy); ctx.lineTo(sx + w * S / 2, sy);
+      ctx.closePath(); ctx.fill();
+    };
 
-    // Clignotement blanc quand touché
+    // Couleurs (avec ombrage 2 tons + effets)
     const flashing = f.hitFlash > 0 && (f.hitFlash % 2 === 0);
-    const skin = flashing ? '#ffffff' : pal.skin;
-    const cloth = flashing ? '#ffffff' : pal.cloth;
-    const cloth2 = flashing ? '#ffffff' : pal.cloth2;
-    const hair = flashing ? '#ffffff' : pal.hair;
+    const armorGlow = f.armorActive && Math.floor(this.t / 3) % 2 === 0;
+    const tint = (c) => flashing ? '#ffffff' : armorGlow ? '#ffe6a0' : c;
+    const skin = tint(pal.skin), skinSh = tint(this._shade(pal.skin, 0.78));
+    const cloth = tint(pal.cloth), clothSh = tint(this._shade(pal.cloth, 0.66));
+    const cloth2 = tint(pal.cloth2), hair = tint(pal.hair), hairSh = tint(this._shade(pal.hair, 0.72));
+    const OUT = '#140a1e'; // contour sombre
 
-    if (koRot) {
-      // Perso au sol
+    // --- KO (couché) ou projeté (roule-boule) ---
+    const rolling = f.state === STATE.KO || f.tumbling > 0;
+    if (rolling) {
       ctx.save();
-      ctx.translate(feet.x, feet.y);
-      ctx.rotate(face * -Math.PI / 2.1);
-      ctx.fillStyle = cloth;
-      ctx.fillRect(-14 * S, -34 * S, 28 * S, 40 * S);
-      ctx.fillStyle = skin;
-      ctx.beginPath(); ctx.arc(0, -44 * S, 11 * S, 0, Math.PI * 2); ctx.fill();
-      // yeux en croix
+      ctx.translate(feet.x, feet.y - (f.onGround ? 0 : 18 * S));
+      const rot = f.state === STATE.KO ? face * -Math.PI / 2.1 : t * 0.5 * face;
+      ctx.rotate(rot);
+      ctx.fillStyle = OUT; ctx.fillRect(-15 * S, -35 * S, 30 * S, 42 * S);
+      ctx.fillStyle = cloth; ctx.fillRect(-13 * S, -33 * S, 26 * S, 38 * S);
+      ctx.fillStyle = skin; ctx.beginPath(); ctx.arc(0, -44 * S, 11 * S, 0, Math.PI * 2); ctx.fill();
       ctx.strokeStyle = '#222'; ctx.lineWidth = 2 * S;
       ctx.beginPath();
       ctx.moveTo(-6 * S, -47 * S); ctx.lineTo(-2 * S, -43 * S);
@@ -238,97 +239,153 @@ export class Renderer {
       return;
     }
 
+    // --- Paramètres de pose ---
+    let bob = 0, lean = 0, legPhase = 0, crouch = 0, armExtend = 0, tuck = 0, dashLean = 0;
+    if (f.state === STATE.WALK) { legPhase = Math.sin(t * 0.35); bob = Math.abs(Math.sin(t * 0.35)) * 2; }
+    else if (f.state === STATE.IDLE || f.state === STATE.BLOCK) { bob = Math.sin(t * 0.08) * 1.2; }
+    else if (f.state === STATE.JUMP) { tuck = 1; }
+    else if (f.state === STATE.CROUCH) { crouch = 1; }
+    else if (f.state === STATE.DASH) { dashLean = 1; }
+    else if (f.state === STATE.HITSTUN) { lean = -0.35; }
+    if (f.attack) {
+      const ph = f.attack.phase;
+      armExtend = ph === 'active' ? 1 : ph === 'startup' ? 0.4 : 0.55;
+      if (f.attack.low) crouch = 1;
+    }
+    const isThrow = f.attack && f.attack.isThrow;
+    const isAerial = f.attack && f.attack.aerial;
+
     const yScale = crouch ? 0.62 : 1;
     const legTop = 30 * yScale;
     const bodyTop = 58 * yScale;
     const headY = (68 * yScale) + bob;
+    const reach = armExtend * 22;
+    const armY = bodyTop - 8 + bob - lean * 10;
+    const id = f.char.id;
 
-    // Jambes
+    // --- Jambes ---
     const legSwing = legPhase * 6;
-    part(-6 + (tuck ? 4 : 0), (legTop / 2) + bob, 9, legTop, cloth2); // jambe arrière
-    part(6 - legSwing * 0.0, (legTop / 2) + bob, 9, legTop, cloth2);  // jambe avant
+    part(-6 + tuck * 5, legTop / 2 + bob, 10, legTop, clothSh);
+    part(6 - tuck * 2 + dashLean * 6, legTop / 2 + bob, 10, legTop, cloth2);
     if (f.state === STATE.WALK) {
-      part(-6 - legSwing, (legTop / 2) + bob, 9, legTop, cloth2);
-      part(6 + legSwing, (legTop / 2) + bob, 9, legTop, cloth2);
+      part(-6 - legSwing, legTop / 2 + bob, 9, legTop, clothSh);
+      part(6 + legSwing, legTop / 2 + bob, 9, legTop, cloth2);
     }
+    // Coup de pied aérien : jambe tendue vers l'avant-bas
+    if (isAerial && f.attack.kind === 'heavy') part(18 + reach * 0.4, 14, 20, 9, cloth2);
     // Pieds
-    part(-6, 3 + bob, 12, 6, '#2a1a12');
-    part(8, 3 + bob, 12, 6, '#2a1a12');
+    part(-6 + tuck * 4, 3 + bob, 12, 6, OUT);
+    part(8 + dashLean * 6, 3 + bob, 12, 6, OUT);
 
-    // Corps / robe
-    if (f.char.id === 'meregrand') {
-      // Robe trapèze
-      const by = (legTop + (bodyTop - legTop) / 2) + bob;
-      part(0, by, 34, bodyTop - legTop, cloth);
-      part(0, legTop + 2 + bob, 40, 8, cloth); // ourlet
-      part(0, bodyTop - 4 + bob, 30, 8, pal.accent); // châle
+    // --- Bras arrière ---
+    part(-11, armY, 8, 20, skinSh);
+
+    // --- Corps ---
+    if (id === 'meregrand') {
+      const by = legTop + (bodyTop - legTop) / 2 + bob;
+      part(0, by, 36, bodyTop - legTop, OUT);           // contour
+      part(0, by, 32, bodyTop - legTop - 2, cloth);     // robe
+      part(face > 0 ? 6 : -6, by, 12, bodyTop - legTop - 2, clothSh); // ombre latérale
+      part(0, legTop + 2 + bob, 40, 8, cloth);          // ourlet
+      part(0, bodyTop - 4 + bob, 30, 8, pal.accent);    // châle
     } else {
-      const by = (legTop + (bodyTop - legTop) / 2) + bob;
-      part(0, by, 30, bodyTop - legTop, cloth); // chemise
-      part(0, legTop + 6 + bob, 30, 14, cloth2); // ceinture pantalon
+      const by = legTop + (bodyTop - legTop) / 2 + bob;
+      part(0, by, 32, bodyTop - legTop, OUT);
+      part(0, by, 28, bodyTop - legTop - 2, cloth);     // chemise
+      part(face > 0 ? 6 : -6, by, 10, bodyTop - legTop - 2, clothSh);
+      part(0, legTop + 6 + bob, 30, 14, cloth2);        // ceinture pantalon
       part(2, by, 5, bodyTop - legTop - 6, pal.accent); // cravate
+      if (f.formIndex >= 1) { part(-12, armY - 2, 7, 12, skin); part(11, armY - 2, 7, 12, skin); } // manches retroussées
     }
 
-    // Bras arrière
-    part(-10, bodyTop - 8 + bob - lean * 10, 8, 20, skin);
+    // --- Tête ---
+    part(0, headY, 24, 24, OUT, 7);
+    part(0, headY, 21, 21, skin, 6);
+    part(face > 0 ? 5 : -5, headY, 8, 21, skinSh, 4); // ombre du visage
 
-    // Tête
-    part(0, headY, 22, 22, skin, 6);
-    // Cheveux
-    if (f.char.id === 'meregrand') {
-      part(0, headY + 9, 26, 12, hair, 5); // chignon large
-      part(0, headY + 15, 12, 10, hair, 4);
-      // Lunettes
-      part(4, headY + 1, 16, 6, pal.accent);
+    // Cheveux + costume par forme
+    if (id === 'meregrand') {
+      part(0, headY + 10, 27, 12, hairSh, 5);
+      part(0, headY + 13, 26, 8, hair, 5);              // chignon
+      part(0, headY + 17, 12, 10, hair, 4);
+      part(4, headY + 1, 16, 6, pal.accent);           // lunettes
+      if (f.formIndex >= 2) {                            // Grand-Mère Loup : oreilles + crocs
+        tri(-8, headY + 13, 8, 11, hairSh);
+        tri(8, headY + 13, 8, 11, hair);
+        part(6, headY - 7, 4, 4, '#ffffff');            // croc
+      }
     } else {
-      part(-2, headY + 10, 24, 8, hair, 3); // cheveux courts
-      part(0, headY - 8, 18, 6, '#5a4030'); // moustache/menton
+      part(-2, headY + 11, 25, 9, hairSh, 3);
+      part(-1, headY + 12, 23, 6, hair, 3);             // cheveux courts
+      part(1, headY - 8, 18, 6, this._shade(pal.hair, 0.9)); // moustache
+      if (f.formIndex >= 1) part(6, headY + 7, 12, 3, OUT); // sourcil froncé
+      if (f.formIndex >= 2) {                            // El Padre Furioso : flammes épaules
+        ctx.save(); ctx.globalAlpha = 0.85;
+        for (let i = 0; i < 2; i++) {
+          const fx = -10 + i * 20;
+          this._flame(ctx, feet.x + face * fx * S, feet.y - (bodyTop - 2) * S, 8 * S, 14 * S, t + i * 7);
+        }
+        ctx.restore();
+      }
     }
 
-    // Yeux (rouges et brillants en furie)
+    // --- Yeux ---
     const eyeColor = f.formIndex >= 2 ? '#ff2b2b' : '#222';
-    part(5, headY + 2, 4, 4, eyeColor);
+    part(3, headY + 3, 3, 3, '#fff');
+    part(5, headY + 3, 3, 4, eyeColor);
     if (f.formIndex >= 2) {
       ctx.save();
-      ctx.globalAlpha = 0.5 + Math.sin(this.t * 0.3) * 0.3;
-      part(5, headY + 2, 7, 7, '#ff5a5a');
+      ctx.globalAlpha = 0.4 + Math.sin(this.t * 0.3) * 0.3;
+      part(5, headY + 3, 8, 8, '#ff5a5a');
       ctx.restore();
     }
 
-    // Bras avant + arme (s'étend pendant l'attaque)
-    const reach = armExtend * 22;
-    const armY = bodyTop - 8 + bob - lean * 10;
-    part(12 + reach * 0.5, armY, 10, 8, skin); // bras
-    this._drawWeapon(ctx, part, f, 20 + reach, armY, armExtend);
+    // --- Bras avant + arme ---
+    if (isThrow) {
+      // Pose de prise : deux bras tendus vers l'avant
+      part(16, armY + 4, 16, 8, skin);
+      part(16, armY - 6, 16, 8, skinSh);
+    } else {
+      part(12 + reach * 0.5, armY - (isAerial ? 8 : 0), 11, 8, skin);
+      this._drawWeapon(ctx, part, f, 20 + reach, armY - (isAerial ? 8 : 0));
+    }
 
-    // Bras de garde
+    // --- Bras de garde ---
     if (f.state === STATE.BLOCK) {
       part(14, bodyTop - 2 + bob, 10, 26, skin);
       ctx.save();
-      ctx.globalAlpha = 0.4 + (f.blockFlash > 0 ? 0.4 : 0);
-      part(20, bodyTop - 4 + bob, 8, 34, '#8fd6ff');
+      ctx.globalAlpha = 0.35 + (f.blockFlash > 0 ? 0.4 : 0);
+      part(21, bodyTop - 6 + bob, 9, 36, '#8fd6ff');
       ctx.restore();
     }
   }
 
-  _drawWeapon(ctx, part, f, x, y, extend) {
+  _drawWeapon(ctx, part, f, x, y) {
     const id = f.char.id;
     const pal = f.char.palette;
-    if (f.attack && f.attack.kind === 'special') {
-      // pas d'arme visible sur les spéciaux (projectile)
-      return;
-    }
+    if (f.attack && f.attack.kind === 'special') return; // projectile : pas d'arme
+    if (f.attack && f.attack.isThrow) return;
     if (id === 'meregrand') {
-      // Canne
-      part(x, y - 6, 6, 34, pal.weapon);
-      part(x + 2, y + 8, 12, 6, pal.weapon); // poignée
+      part(x, y - 6, 6, 34, pal.weapon);              // canne
+      part(x + 2, y + 8, 12, 6, pal.weapon);          // poignée
+      if (f.formIndex >= 2) part(x, y - 22, 5, 6, '#dfe6ee'); // griffe en furie
     } else {
-      // Journal roulé / ceinture
-      if (f.attack && f.attack.kind === 'heavy') {
-        part(x + 4, y, 30, 6, pal.accent); // ceinture longue
-      } else {
-        part(x, y, 16, 8, pal.weapon);
-      }
+      if (f.attack && f.attack.kind === 'heavy') part(x + 4, y, 30, 6, pal.accent); // ceinture
+      else part(x, y, 16, 8, pal.weapon);             // journal roulé
+    }
+  }
+
+  // Petite flamme animée (furie de Padre)
+  _flame(ctx, x, y, w, h, t) {
+    const wob = Math.sin(t * 0.5) * 3;
+    const cols = ['#ff3a1a', '#ff9c1a', '#ffe259'];
+    for (let i = 0; i < 3; i++) {
+      const s = 1 - i * 0.3;
+      ctx.fillStyle = cols[i];
+      ctx.beginPath();
+      ctx.moveTo(x - w * s / 2, y);
+      ctx.quadraticCurveTo(x + wob, y - h * s - 4, x + w * s / 2, y);
+      ctx.closePath(); ctx.fill();
     }
   }
 
@@ -560,6 +617,37 @@ export class Renderer {
     ctx.strokeText(text, x, y);
     ctx.fillStyle = color;
     ctx.fillText(text, x, y);
+  }
+
+  // Assombrit une couleur hex (#rrggbb) — f = fraction conservée (0..1).
+  _shade(hex, f) {
+    if (!hex || hex[0] !== '#' || hex.length < 7) return hex;
+    const n = parseInt(hex.slice(1, 7), 16);
+    const r = Math.round(((n >> 16) & 255) * f);
+    const g = Math.round(((n >> 8) & 255) * f);
+    const b = Math.round((n & 255) * f);
+    return `rgb(${r},${g},${b})`;
+  }
+
+  // Compteur de combos (façon arcade)
+  _drawCombo(ctx, engine) {
+    for (const side of ['left', 'right']) {
+      const slot = side === 'left' ? 'p1' : 'p2';
+      const c = engine.combo[slot];
+      if (!c || c.count < 2) continue;
+      const x = side === 'left' ? 96 : VIEW_W - 96;
+      const y = 150;
+      const pop = Math.min(1, c.timer / 50);
+      ctx.save();
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      const size = 22 + pop * 8;
+      ctx.font = `bold ${size}px "Press Start 2P", monospace`;
+      this._outlinedText(ctx, `${c.count}`, x, y, size, '#ffd24a');
+      ctx.font = `bold 10px "Press Start 2P", monospace`;
+      this._outlinedText(ctx, 'COMBO', x, y + size * 0.7, 10, '#fff');
+      ctx.restore();
+    }
   }
 
   _roundRect(ctx, x, y, w, h, r) {
