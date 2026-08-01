@@ -57,7 +57,8 @@ export async function host(handlers) {
     peer = new Peer(hostId(code), opts);
 
     peer.on('open', () => {
-      handlers.onReady({ roomCode: code, joinUrl: `${location.origin}/play?room=${code}` });
+      // On pointe vers un fichier réel (pas de dépendance à une réécriture /play)
+      handlers.onReady({ roomCode: code, joinUrl: `${location.origin}/controller.html?room=${code}` });
     });
 
     peer.on('connection', (conn) => {
