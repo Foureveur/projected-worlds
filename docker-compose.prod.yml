@@ -1,0 +1,36 @@
+# Stack de production tout-en-un : le jeu + Caddy (reverse proxy + HTTPS auto).
+# Démarrage : docker compose -f docker-compose.prod.yml up -d --build
+#
+# Prérequis :
+#   - DNS : rage.partiqle.studio -> IP du VPS (enregistrement A)
+#   - Ports 80 et 443 libres sur le VPS (Caddy les utilise pour le TLS)
+
+services:
+  app:
+    build: .
+    image: rage-royale
+    container_name: rage-royale
+    restart: unless-stopped
+    environment:
+      - PUBLIC_URL=https://rage.partiqle.studio
+      - PORT=3000
+    expose:
+      - "3000" # interne uniquement ; c'est Caddy qui expose au public
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: rage-royale-caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data # certificats TLS (persistés)
+      - caddy_config:/config
+    depends_on:
+      - app
+
+volumes:
+  caddy_data:
+  caddy_config:
