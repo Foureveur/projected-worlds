@@ -147,77 +147,139 @@ function vibrate(pattern) {
 // ------------------------------------------------------------------
 // Entrées tactiles (multitouch maison)
 // ------------------------------------------------------------------
-const buttons = () => $$('#pad .btn');
-const touchBtn = new Map(); // touchId -> data-btn
+// Mode de contrôle : 'dpad' (croix 3x3 + diagonales) ou 'joy' (joystick)
+let ctrlMode = localStorage.getItem('ctrlMode') || 'dpad';
+function applyMode() {
+  document.body.classList.toggle('mode-dpad', ctrlMode === 'dpad');
+  document.body.classList.toggle('mode-joy', ctrlMode === 'joy');
+  $$('.mode-opt').forEach((b) => b.classList.toggle('active', b.dataset.mode === ctrlMode));
+}
+function setMode(m) {
+  ctrlMode = m;
+  try { localStorage.setItem('ctrlMode', m); } catch {}
+  clearDirs(); joyReset(); clearDpadVisual();
+  applyMode();
+}
 
-function btnUnder(x, y) {
-  for (const el of buttons()) {
+// --- Boutons d'action (droite) ---
+function actUnder(x, y) {
+  for (const el of $$('#pad .act')) {
     const r = el.getBoundingClientRect();
     if (x >= r.left && x <= r.right && y >= r.top && y <= r.bottom) return el;
   }
   return null;
 }
-
 function press(btn) {
   send({ t: 'input', btn, down: true });
   vibrate(6);
-  const el = $(`#pad .btn[data-btn="${btn}"]`);
+  const el = $(`#pad .act[data-btn="${btn}"]`);
   if (el) el.classList.add('pressed');
 }
 function release(btn) {
   send({ t: 'input', btn, down: false });
-  const el = $(`#pad .btn[data-btn="${btn}"]`);
+  const el = $(`#pad .act[data-btn="${btn}"]`);
   if (el) el.classList.remove('pressed');
 }
 
-function onTouchStart(e) {
-  e.preventDefault();
-  for (const t of e.changedTouches) {
-    const el = btnUnder(t.clientX, t.clientY);
-    if (el) {
-      const btn = el.dataset.btn;
-      touchBtn.set(t.identifier, btn);
-      press(btn);
+// --- État directionnel (commun croix/joystick) ---
+const dirState = { left: false, right: false, up: false, down: false };
+function applyDirs(target) {
+  for (const d of ['left', 'right', 'up', 'down']) {
+    const want = !!target[d];
+    if (dirState[d] !== want) { dirState[d] = want; send({ t: 'input', btn: d, down: want }); }
+  }
+}
+function clearDirs() { applyDirs({}); }
+
+// --- Croix 3x3 ---
+function cellAt(x, y) {
+  for (const el of $$('#dpad9 .dcell')) {
+    if (el.classList.contains('center')) continue;
+    const r = el.getBoundingClientRect();
+    if (x >= r.left && x <= r.right && y >= r.top && y <= r.bottom) return el;
+  }
+  return null;
+}
+function clearDpadVisual() { $$('#dpad9 .dcell').forEach((c) => c.classList.remove('pressed')); }
+function setDpadCell(el) {
+  clearDpadVisual();
+  if (!el) { clearDirs(); return; }
+  el.classList.add('pressed');
+  const t = {};
+  (el.dataset.dirs || '').split(' ').filter(Boolean).forEach((d) => { t[d] = true; });
+  applyDirs(t);
+}
+
+// --- Joystick ---
+function joyUpdate(x, y) {
+  const base = $('#joystick').getBoundingClientRect();
+  const cx = base.left + base.width / 2, cy = base.top + base.height / 2;
+  let dx = x - cx, dy = y - cy;
+  const max = base.width / 2, dist = Math.hypot(dx, dy) || 1;
+  if (dist > max) { dx = dx / dist * max; dy = dy / dist * max; }
+  const k = $('#joyKnob'); if (k) k.style.transform = `translate(${dx}px, ${dy}px)`;
+  const dz = max * 0.34;
+  const t = {};
+  if (dx < -dz) t.left = true; else if (dx > dz) t.right = true;
+  if (dy < -dz) t.up = true; else if (dy > dz) t.down = true;
+  applyDirs(t);
+}
+function joyReset() { const k = $('#joyKnob'); if (k) k.style.transform = 'translate(0,0)'; }
+
+// --- Routage multitouch (action / croix / joystick) ---
+const touchRole = new Map(); // id -> {type:'act',btn} | {type:'dpad'} | {type:'joy'}
+let dpadTouch = null, joyTouch = null;
+function inside(sel, x, y) {
+  const el = $(sel); if (!el) return false;
+  const r = el.getBoundingClientRect();
+  return x >= r.left && x <= r.right && y >= r.top && y <= r.bottom;
+}
+function startTouch(id, x, y) {
+  const a = actUnder(x, y);
+  if (a) { touchRole.set(id, { type: 'act', btn: a.dataset.btn }); press(a.dataset.btn); return; }
+  if (ctrlMode === 'joy' && joyTouch === null && inside('#joystick', x, y)) {
+    joyTouch = id; touchRole.set(id, { type: 'joy' }); joyUpdate(x, y); return;
+  }
+  if (ctrlMode === 'dpad' && dpadTouch === null) {
+    const c = cellAt(x, y);
+    if (c) { dpadTouch = id; touchRole.set(id, { type: 'dpad' }); setDpadCell(c); }
+  }
+}
+function moveTouch(id, x, y) {
+  const role = touchRole.get(id);
+  if (!role) { startTouch(id, x, y); return; }
+  if (role.type === 'joy') joyUpdate(x, y);
+  else if (role.type === 'dpad') setDpadCell(cellAt(x, y));
+  else if (role.type === 'act') {
+    const a = actUnder(x, y);
+    const now = a ? a.dataset.btn : null;
+    if (now !== role.btn) {
+      release(role.btn);
+      if (now) { press(now); role.btn = now; } else touchRole.delete(id);
     }
   }
 }
-function onTouchMove(e) {
-  e.preventDefault();
-  for (const t of e.changedTouches) {
-    const prev = touchBtn.get(t.identifier) || null;
-    const el = btnUnder(t.clientX, t.clientY);
-    const now = el ? el.dataset.btn : null;
-    if (prev !== now) {
-      if (prev) release(prev);
-      if (now) press(now);
-      if (now) touchBtn.set(t.identifier, now);
-      else touchBtn.delete(t.identifier);
-    }
+function endTouch(id) {
+  const role = touchRole.get(id);
+  if (role) {
+    if (role.type === 'joy') { joyTouch = null; joyReset(); clearDirs(); }
+    else if (role.type === 'dpad') { dpadTouch = null; clearDpadVisual(); clearDirs(); }
+    else if (role.type === 'act') release(role.btn);
   }
-}
-function onTouchEnd(e) {
-  e.preventDefault();
-  for (const t of e.changedTouches) {
-    const prev = touchBtn.get(t.identifier);
-    if (prev) release(prev);
-    touchBtn.delete(t.identifier);
-  }
+  touchRole.delete(id);
 }
 
 function bindPad() {
   const pad = $('#pad');
-  pad.addEventListener('touchstart', onTouchStart, { passive: false });
-  pad.addEventListener('touchmove', onTouchMove, { passive: false });
-  pad.addEventListener('touchend', onTouchEnd, { passive: false });
-  pad.addEventListener('touchcancel', onTouchEnd, { passive: false });
+  pad.addEventListener('touchstart', (e) => { e.preventDefault(); for (const t of e.changedTouches) startTouch(t.identifier, t.clientX, t.clientY); }, { passive: false });
+  pad.addEventListener('touchmove', (e) => { e.preventDefault(); for (const t of e.changedTouches) moveTouch(t.identifier, t.clientX, t.clientY); }, { passive: false });
+  pad.addEventListener('touchend', (e) => { e.preventDefault(); for (const t of e.changedTouches) endTouch(t.identifier); }, { passive: false });
+  pad.addEventListener('touchcancel', (e) => { e.preventDefault(); for (const t of e.changedTouches) endTouch(t.identifier); }, { passive: false });
 
-  // Souris (test sur PC)
-  let mouseBtn = null;
-  pad.addEventListener('mousedown', (e) => {
-    const el = btnUnder(e.clientX, e.clientY);
-    if (el) { mouseBtn = el.dataset.btn; press(mouseBtn); }
-  });
-  window.addEventListener('mouseup', () => { if (mouseBtn) { release(mouseBtn); mouseBtn = null; } });
+  // Souris (test PC)
+  pad.addEventListener('mousedown', (e) => startTouch('mouse', e.clientX, e.clientY));
+  window.addEventListener('mousemove', (e) => { if (touchRole.has('mouse')) moveTouch('mouse', e.clientX, e.clientY); });
+  window.addEventListener('mouseup', () => endTouch('mouse'));
 }
 
 // ------------------------------------------------------------------
@@ -234,6 +296,8 @@ function checkOrientation() {
 // Init
 // ------------------------------------------------------------------
 renderCharCards();
+$$('.mode-opt').forEach((b) => b.addEventListener('click', () => setMode(b.dataset.mode)));
+applyMode();
 $('#readyBtn').addEventListener('click', doReady);
 $('#soloBtn').addEventListener('click', doSolo);
 $('#codeBtn').addEventListener('click', () => {

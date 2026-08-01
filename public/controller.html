@@ -36,6 +36,11 @@
       <span class="combo-tip">◀◀ / ▶▶ Dash</span>
       <span class="combo-tip">Coups enchaînés = Combos</span>
     </div>
+    <div class="mode-toggle" id="modeToggle">
+      <span class="mt-label">Manette&nbsp;:</span>
+      <button class="mode-opt" data-mode="dpad">✚ Croix</button>
+      <button class="mode-opt" data-mode="joy">🕹 Joystick</button>
+    </div>
     <div class="select-actions">
       <button id="readyBtn" class="big-btn">PRÊT ! (2 joueurs)</button>
       <button id="soloBtn" class="big-btn solo">🤖 Solo vs CPU</button>
@@ -56,12 +61,23 @@
     <div id="waiting" class="waiting">En attente de l'autre joueur…</div>
 
     <div class="controls">
-      <!-- Croix directionnelle -->
-      <div class="dpad">
-        <button class="btn dir up" data-btn="up"><span>▲</span><small>SAUT</small></button>
-        <button class="btn dir left" data-btn="left">◀</button>
-        <button class="btn dir right" data-btn="right">▶</button>
-        <button class="btn dir down" data-btn="down"><span>▼</span><small>BAS</small></button>
+      <!-- Zone de déplacement : croix 3x3 OU joystick selon le mode -->
+      <div class="move-zone">
+        <div class="dpad9" id="dpad9">
+          <button class="dcell diag" data-dirs="up left">↖</button>
+          <button class="dcell" data-dirs="up"><span>↑</span><small>SAUT</small></button>
+          <button class="dcell diag" data-dirs="up right">↗</button>
+          <button class="dcell" data-dirs="left">◀</button>
+          <button class="dcell center" data-dirs=""></button>
+          <button class="dcell" data-dirs="right">▶</button>
+          <button class="dcell diag" data-dirs="down left">↙</button>
+          <button class="dcell" data-dirs="down"><span>↓</span><small>BAS</small></button>
+          <button class="dcell diag" data-dirs="down right">↘</button>
+        </div>
+        <div class="joystick" id="joystick">
+          <div class="joy-ring"></div>
+          <div class="joy-knob" id="joyKnob">🕹</div>
+        </div>
       </div>
 
       <!-- Boutons d'action -->

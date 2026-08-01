@@ -117,10 +117,6 @@ html, body {
   padding: 0 20px calc(env(safe-area-inset-bottom) + 24px);
 }
 
-/* Croix directionnelle */
-.dpad {
-  position: relative; width: 190px; height: 190px;
-}
 .btn {
   position: absolute; border: none; color: #fff; font-family: inherit;
   background: var(--panel); border: 2px solid #4a3a6a;
@@ -130,13 +126,42 @@ html, body {
 .btn small { font-size: 8px; opacity: .8; margin-top: 2px; }
 .btn.pressed { filter: brightness(1.8); transform: scale(0.94); }
 
-.dir { width: 64px; height: 64px; border-radius: 14px; font-size: 24px; }
-.dir.up { top: 0; left: 63px; }
-.dir.down { bottom: 0; left: 63px; }
-.dir.left { top: 63px; left: 0; }
-.dir.right { top: 63px; right: 0; }
-.dir.up, .dir.down { background: #241a3a; }
-.dir.left, .dir.right { background: #2a2044; }
+/* Zone de déplacement (croix 3x3 OU joystick) */
+.move-zone { position: relative; width: 192px; height: 192px; }
+
+/* Croix directionnelle 3x3 (avec diagonales) */
+.dpad9 { display: none; width: 192px; height: 192px; touch-action: none;
+  grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(3, 1fr); gap: 4px; }
+body.mode-dpad .dpad9 { display: grid; }
+.dcell {
+  border: 2px solid #4a3a6a; background: #241a3a; color: #fff; border-radius: 10px;
+  font-size: 22px; font-family: inherit; touch-action: none;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+}
+.dcell small { font-size: 7px; opacity: .8; }
+.dcell.diag { background: #1b1430; color: #9b8fd0; font-size: 18px; }
+.dcell.center { background: transparent; border-color: transparent; pointer-events: none; }
+.dcell.pressed { filter: brightness(2); transform: scale(0.93); border-color: var(--accent); }
+
+/* Joystick */
+.joystick { display: none; position: relative; width: 192px; height: 192px;
+  border-radius: 50%; background: radial-gradient(circle, #241a3a, #150e26);
+  border: 3px solid #4a3a6a; touch-action: none; }
+body.mode-joy .joystick { display: block; }
+.joy-ring { position: absolute; inset: 26px; border: 2px dashed #3a2e55; border-radius: 50%; }
+.joy-knob {
+  position: absolute; left: 50%; top: 50%; width: 86px; height: 86px; margin: -43px 0 0 -43px;
+  border-radius: 50%; background: radial-gradient(circle at 40% 35%, #7a5fb0, #2a2044);
+  border: 3px solid #b46bff; display: flex; align-items: center; justify-content: center;
+  font-size: 28px; will-change: transform;
+}
+
+/* Sélecteur de mode (écran de sélection) */
+.mode-toggle { display: flex; align-items: center; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; justify-content: center; }
+.mt-label { font-size: 11px; color: #b7a9e0; }
+.mode-opt { font-family: inherit; font-size: 12px; padding: 8px 14px; border-radius: 10px;
+  border: 2px solid #3a2a5a; background: var(--panel); color: #fff; }
+.mode-opt.active { border-color: var(--accent); background: #241634; color: var(--accent); }
 
 /* Boutons d'action */
 .actions {
