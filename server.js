@@ -23,9 +23,18 @@ import QRCode from 'qrcode';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = process.env.PORT || 3000;
+const HOST = process.env.HOST || '0.0.0.0';
+// En prod derrière un domaine/reverse proxy, définir PUBLIC_URL
+// (ex: https://jeu.partiqle.studio) pour que le QR code pointe vers le
+// domaine public plutôt que vers l'IP locale du serveur.
+const PUBLIC_URL = process.env.PUBLIC_URL ? process.env.PUBLIC_URL.replace(/\/$/, '') : null;
 
 const app = express();
+app.set('trust proxy', true); // respecte X-Forwarded-* derrière nginx/caddy
 app.use(express.static(path.join(__dirname, 'public')));
+
+// Sonde de santé pour le reverse proxy / monitoring
+app.get('/healthz', (_req, res) => res.json({ ok: true, rooms: rooms.size }));
 
 // Petite redirection sympa : /play -> la manette
 app.get('/play', (_req, res) => {
@@ -81,6 +90,22 @@ function getLanAddress() {
   return 'localhost';
 }
 
+/**
+ * URL de base à mettre dans le QR code / lien de partage.
+ * Priorité : PUBLIC_URL (prod) > en-têtes de la requête (derrière un proxy)
+ * > adresse LAN (dev sur réseau local).
+ * `req` est la requête HTTP d'upgrade WebSocket.
+ */
+function joinBase(req) {
+  if (PUBLIC_URL) return PUBLIC_URL;
+  const headers = (req && req.headers) || {};
+  const xfProto = (headers['x-forwarded-proto'] || '').split(',')[0].trim();
+  const proto = xfProto || (req && req.socket && req.socket.encrypted ? 'https' : 'http');
+  const host = headers['x-forwarded-host'] || headers.host;
+  if (host) return `${proto}://${host}`;
+  return `http://${getLanAddress()}:${PORT}`;
+}
+
 function send(ws, obj) {
   if (ws && ws.readyState === ws.OPEN) {
     ws.send(JSON.stringify(obj));
@@ -95,8 +120,9 @@ function cleanupRoom(code) {
   if (empty) rooms.delete(code);
 }
 
-wss.on('connection', (ws) => {
+wss.on('connection', (ws, req) => {
   ws.meta = { role: null, room: null, slot: null };
+  ws.baseUrl = joinBase(req); // URL publique déduite à la connexion
 
   ws.on('message', (raw) => {
     let msg;
@@ -112,14 +138,11 @@ wss.on('connection', (ws) => {
         const code = makeRoomCode();
         rooms.set(code, { screen: ws, players: { p1: null, p2: null } });
         ws.meta = { role: 'screen', room: code, slot: null };
-        const lan = getLanAddress();
         send(ws, {
           t: 'welcome',
           role: 'screen',
           room: code,
-          joinUrl: `http://${lan}:${PORT}/play?room=${code}`,
-          lan,
-          port: PORT,
+          joinUrl: `${ws.baseUrl}/play?room=${code}`,
         });
         return;
       }
@@ -179,11 +202,12 @@ wss.on('connection', (ws) => {
   });
 });
 
-server.listen(PORT, () => {
+server.listen(PORT, HOST, () => {
   const lan = getLanAddress();
   console.log('\n  ⚔️  RAGE ROYALE — Mère-Grand vs Padre');
   console.log('  ─────────────────────────────────────');
   console.log(`  🖥️  Écran de jeu  : http://localhost:${PORT}`);
   console.log(`  🖥️  (sur le LAN) : http://${lan}:${PORT}`);
+  if (PUBLIC_URL) console.log(`  🌐 Public        : ${PUBLIC_URL}`);
   console.log(`  📱 Manettes     : ouvre l'écran, scanne le QR code\n`);
 });
