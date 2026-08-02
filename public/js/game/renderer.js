@@ -629,6 +629,16 @@ export class Renderer {
 
     this._drawProjectiles(ctx, cam, engine);
     this._drawEffects(ctx, cam, engine);
+
+    // Repère "★ FUSION ★" au-dessus du perso fusionné
+    const fu = engine.fusion && engine.fusion.active;
+    if (fu) {
+      const head = this.w2s(cam, fu.x, fu.pos.y + (fu.char.body.h + 26) * fu.scale);
+      ctx.save();
+      ctx.globalAlpha = 0.7 + Math.sin(this.t * 0.3) * 0.3;
+      this._outlinedText(ctx, '★ FUSION ★', head.x, head.y, 10, '#ffd24a');
+      ctx.restore();
+    }
     ctx.restore();
 
     if (engine.flash > 0) { ctx.fillStyle = `rgba(255,255,255,${engine.flash / 16})`; ctx.fillRect(0, 0, this.W, this.H); }
@@ -701,20 +711,29 @@ export class Renderer {
       const y = gap + row * (ph + gap);
       ctx.globalAlpha = p.dead ? 0.4 : 1;
       ctx.fillStyle = '#120a24'; ctx.fillRect(x - 2, y - 2, pw + 4, ph + 4);
-      ctx.strokeStyle = p.color || '#fff'; ctx.lineWidth = 2; ctx.strokeRect(x - 2, y - 2, pw + 4, ph + 4);
+      ctx.strokeStyle = p.fused ? '#ffd24a' : (p.color || '#fff'); ctx.lineWidth = 2; ctx.strokeRect(x - 2, y - 2, pw + 4, ph + 4);
       ctx.font = 'bold 9px monospace'; ctx.fillStyle = p.color || '#fff'; ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
-      ctx.fillText(`${p.slot ? p.slot.toUpperCase() : ''} ${p.name}`, x + 4, y + 11);
-      const barW = pw - 8, barH = 8, by = y + 15;
-      const hpPct = Math.max(0, p.hp) / p.maxHp;
-      ctx.fillStyle = '#4a1220'; ctx.fillRect(x + 4, by, barW, barH);
-      let hc = '#3ad14a'; if (hpPct < 0.3) hc = '#ff3a3a'; else if (hpPct < 0.6) hc = '#f5d90a';
-      ctx.fillStyle = p.dead ? '#555' : hc; ctx.fillRect(x + 4, by, barW * hpPct, barH);
-      // Vies
-      const sy = by + barH + 4;
-      ctx.font = '9px monospace'; ctx.fillStyle = p.color || '#fff';
-      ctx.fillText(p.dead ? '☠️ GAME OVER' : '♥ '.repeat(Math.max(0, p.lives)) || '—', x + 4, sy + 7);
+      if (p.fused) {
+        ctx.fillStyle = '#ffd24a';
+        ctx.fillText(`${p.slot.toUpperCase()} · ${p.role === 'pilote' ? '🕹️ PILOTE' : '👊 FRAPPEUR'}`, x + 4, y + 11);
+        ctx.font = '9px monospace'; ctx.fillStyle = '#ffe259';
+        ctx.fillText('★ FUSIONNÉ ★', x + 4, y + 30);
+      } else {
+        ctx.fillText(`${p.slot ? p.slot.toUpperCase() : ''} ${p.name}`, x + 4, y + 11);
+        const barW = pw - 8, barH = 8, by = y + 15;
+        const hpPct = Math.max(0, p.hp) / p.maxHp;
+        ctx.fillStyle = '#4a1220'; ctx.fillRect(x + 4, by, barW, barH);
+        let hc = '#3ad14a'; if (hpPct < 0.3) hc = '#ff3a3a'; else if (hpPct < 0.6) hc = '#f5d90a';
+        ctx.fillStyle = p.dead ? '#555' : hc; ctx.fillRect(x + 4, by, barW * hpPct, barH);
+        const sy = by + barH + 4;
+        ctx.font = '9px monospace'; ctx.fillStyle = p.color || '#fff';
+        ctx.fillText(p.dead ? '☠️ GAME OVER' : '♥ '.repeat(Math.max(0, p.lives)) || '—', x + 4, sy + 7);
+      }
     });
     ctx.globalAlpha = 1;
+
+    // Jauge / barre de FUSION (bas de l'écran)
+    this._drawFusionBar(ctx, engine, hud);
 
     // Barre de vie du boss
     if (hud.boss) {
@@ -731,6 +750,34 @@ export class Renderer {
       const left = hud.enemies + hud.queue;
       if (left > 0 && engine.phase === 'play') ctx.fillText('ENNEMIS : ' + left, this.W - 12, 12);
     }
+  }
+
+  _drawFusionBar(ctx, engine, hud) {
+    const f = hud.fusion; if (!f) return;
+    const w = Math.min(320, this.W * 0.42);
+    const x = (this.W - w) / 2;
+    ctx.textBaseline = 'alphabetic';
+    if (f.active) {
+      const y = this.H - 46;
+      ctx.fillStyle = '#120a24'; ctx.fillRect(x - 3, y - 3, w + 6, 16);
+      ctx.fillStyle = '#4a3a10'; ctx.fillRect(x, y, w, 10);
+      const g = ctx.createLinearGradient(x, 0, x + w, 0);
+      g.addColorStop(0, '#ff5bd0'); g.addColorStop(1, '#4ad6ff');
+      ctx.fillStyle = g; ctx.fillRect(x, y, w * Math.max(0, f.hp) / f.maxHp, 10);
+      ctx.strokeStyle = '#ffd24a'; ctx.lineWidth = 2; ctx.strokeRect(x, y, w, 10);
+      ctx.font = 'bold 9px monospace'; ctx.fillStyle = '#ffd24a'; ctx.textAlign = 'center';
+      ctx.fillText('★ FUSION ★  ' + Math.ceil(f.timer / 60) + 's  ·  ⚡ super', this.W / 2, y - 5);
+      return;
+    }
+    const y = this.H - 28;
+    const pct = f.gauge / f.max;
+    ctx.fillStyle = '#120a24'; ctx.fillRect(x - 3, y - 3, w + 6, 14);
+    ctx.fillStyle = '#2a2036'; ctx.fillRect(x, y, w, 8);
+    ctx.fillStyle = pct >= 1 ? '#ffd24a' : '#a06ad0'; ctx.fillRect(x, y, w * pct, 8);
+    ctx.strokeStyle = '#4a3a6a'; ctx.lineWidth = 1.5; ctx.strokeRect(x, y, w, 8);
+    ctx.font = 'bold 8px monospace'; ctx.textAlign = 'center';
+    if (pct >= 1) { ctx.fillStyle = Math.floor(this.t / 8) % 2 ? '#ffd24a' : '#fff'; ctx.fillText('FUSION PRÊTE — collez-vous + ⚡ ENSEMBLE', this.W / 2, y - 4); }
+    else { ctx.fillStyle = '#9b8fd0'; ctx.fillText('JAUGE DE FUSION', this.W / 2, y - 4); }
   }
 
   // ------------------------------------------------------------------

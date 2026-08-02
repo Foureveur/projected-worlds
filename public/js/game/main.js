@@ -359,6 +359,20 @@ function pushState(slot) {
   const f = active.fighters[slot];
   if (!f || !net) return;
   if (active.mode === 'streets') {
+    // Fusion : la manette affiche le rôle (Pilote / Frappeur) et la vie fusionnée
+    if (f.hidden && f.fusionEntity) {
+      const fe = f.fusionEntity;
+      net.send(slot, {
+        t: 'state', mode: 'streets',
+        health: Math.round((fe.hp / fe.maxHp) * 100),
+        rage: 100, form: 2,
+        formName: f.fusionRole === 'pilote' ? '🕹️ PILOTE' : '👊 FRAPPEUR',
+        charName: 'FUSION ★',
+        specialName: f.fusionRole === 'pilote' ? 'Déplacements' : 'Super (⚡)',
+        specialLocked: false, phase: active.phase, stocks: f.lives, eliminated: false,
+      });
+      return;
+    }
     // Beat'em up : santé ramenée sur 100, vies = stocks
     net.send(slot, {
       t: 'state', mode: 'streets',
