@@ -2,15 +2,17 @@
  * main.js (écran de jeu)
  * ----------------------
  * - devient l'HÔTE peer-to-peer (les manettes s'y connectent en direct)
- * - affiche le salon (QR code + code de partie) en attendant 2 manettes
+ * - affiche le salon (QR code + code de partie) en attendant les manettes
+ * - choix du MODE : Versus (1v1) ou Smash (2-4, mêlée générale)
  * - gère la sélection des personnages
  * - lance la boucle de jeu à pas fixe (60 Hz) et le rendu
  * - renvoie son + vibrations aux bonnes manettes
- * - clavier de secours pour tester à 2 sur un seul PC
+ * - clavier de secours pour tester sur un seul PC
  */
 
 import { TICK_MS } from './constants.js';
 import { Engine } from './engine.js';
+import { SmashEngine } from './smash.js';
 import { Renderer } from './renderer.js';
 import { AudioFx } from './audio.js';
 import { CHARACTER_LIST } from './characters.js';
@@ -18,6 +20,7 @@ import { AIController } from './ai.js';
 import * as Net from '../net/peernet.js';
 
 const $ = (sel) => document.querySelector(sel);
+const SLOTS4 = ['p1', 'p2', 'p3', 'p4'];
 
 const canvas = $('#game');
 const renderer = new Renderer(canvas);
@@ -26,22 +29,27 @@ const audio = new AudioFx();
 let net = null;
 let room = null;
 let paused = false;
-let mode = 'lobby'; // 'lobby' | 'playing'
-let ai = null;         // adversaire CPU (mode 1 joueur)
+let mode = 'lobby';    // 'lobby' | 'playing'
+let gameMode = 'versus'; // 'versus' | 'smash'
+let botsCount = 1;       // bots CPU à ajouter en smash
+let ais = [];            // IA actives (solo versus ou bots smash)
 let soloMode = false;
-let humanSlot = null;  // slot du joueur humain en solo
+let humanSlot = null;    // slot du joueur humain en solo
 
 const selection = {
   p1: { connected: false, charIdx: 0, ready: false },
   p2: { connected: false, charIdx: 1, ready: false },
+  p3: { connected: false, charIdx: 2, ready: false },
+  p4: { connected: false, charIdx: 3, ready: false },
 };
 
-const engine = new Engine({
-  onEvent: (type, data) => {
-    audio.play(type, data);
-    handleHaptics(type, data);
-  },
-});
+// Deux moteurs partageant les mêmes retours (son + vibrations)
+const hooks = {
+  onEvent: (type, data) => { audio.play(type, data); handleHaptics(type, data); },
+};
+const versus = new Engine(hooks);
+const smash = new SmashEngine(hooks);
+let active = versus; // moteur en cours (rendu / entrées / diffusion d'état)
 
 // ------------------------------------------------------------------
 // Réseau (hôte peer-to-peer)
@@ -53,7 +61,7 @@ async function startHost() {
       onJoin: (slot) => { selection[slot].connected = true; selection[slot].ready = false; updateLobby(); },
       onLeave: (slot) => {
         selection[slot].connected = false; selection[slot].ready = false;
-        if (mode === 'playing') paused = true;
+        if (mode === 'playing' && gameMode === 'versus') paused = true;
         updateLobby();
       },
       onMessage: (slot, msg) => onControllerMessage(slot, msg),
@@ -86,12 +94,11 @@ function onControllerMessage(slot, msg) {
 function onControllerInput(slot, btn, down) {
   if (!slot) return;
   if (soloMode && slot !== humanSlot) return; // en solo, une seule manette pilote
-  // En fin de match, ⚡ Spécial relance une revanche.
-  if (mode === 'playing' && engine.phase === 'matchEnd') {
+  if (mode === 'playing' && active.phase === 'matchEnd') {
     if (btn === 'special' && down) restartMatch();
     return;
   }
-  if (mode === 'playing' && !paused) engine.setInput(slot, btn, down);
+  if (mode === 'playing' && !paused) active.setInput(slot, btn, down);
 }
 
 // ------------------------------------------------------------------
@@ -129,10 +136,17 @@ function renderQR(text, imgEl) {
   } catch (e) { console.warn('qr', e); }
 }
 
+function connectedSlots() { return SLOTS4.filter((s) => selection[s].connected); }
+
 function updateLobby() {
-  for (const slot of ['p1', 'p2']) {
-    const s = selection[slot];
+  const shown = gameMode === 'smash' ? SLOTS4 : ['p1', 'p2'];
+  for (const slot of SLOTS4) {
     const card = $(`#card-${slot}`);
+    if (!card) continue;
+    const visible = shown.includes(slot);
+    card.classList.toggle('hidden', !visible);
+    if (!visible) continue;
+    const s = selection[slot];
     const char = CHARACTER_LIST[s.charIdx];
     card.querySelector('.char-name').textContent = char.name;
     card.querySelector('.char-sub').textContent = char.formNames.join(' › ');
@@ -143,36 +157,101 @@ function updateLobby() {
     else if (s.ready) status.textContent = '✓ PRÊT';
     else status.textContent = 'Choisis ton perso puis PRÊT';
   }
-}
 
-function maybeStart() {
-  const a = selection.p1, b = selection.p2;
-  if (a.connected && b.connected && a.ready && b.ready && mode === 'lobby') {
-    startGame();
+  // Boutons de mode
+  document.querySelectorAll('.gmode-opt').forEach((b) => b.classList.toggle('active', b.dataset.gmode === gameMode));
+  document.querySelectorAll('.bots-opt').forEach((b) => b.classList.toggle('active', Number(b.dataset.bots) === botsCount));
+
+  // Panneaux spécifiques
+  const smashCtrls = $('#smashCtrls'); if (smashCtrls) smashCtrls.classList.toggle('hidden', gameMode !== 'smash');
+  const rounds = $('#roundsRow'); if (rounds) rounds.classList.toggle('hidden', gameMode !== 'versus');
+
+  // État du bouton LANCER (smash)
+  const startBtn = $('#startSmash');
+  if (startBtn) {
+    const total = Math.min(4, connectedSlots().length + botsCount);
+    startBtn.disabled = !(gameMode === 'smash' && total >= 2);
+    startBtn.textContent = `LANCER SMASH (${total} combattants)`;
   }
 }
 
-function startGame() {
+function setGameMode(m) {
+  if (mode !== 'lobby') return;
+  gameMode = m;
+  updateLobby();
+}
+
+function maybeStart() {
+  if (mode !== 'lobby') return;
+  if (gameMode === 'versus') {
+    const a = selection.p1, b = selection.p2;
+    if (a.connected && b.connected && a.ready && b.ready) startVersus();
+  } else {
+    const humans = connectedSlots();
+    const total = Math.min(4, humans.length + botsCount);
+    if (humans.length >= 1 && humans.every((s) => selection[s].ready) && total >= 2) startSmash();
+  }
+}
+
+function startVersus() {
   audio.init();
   audio.startMusic('battle');
+  active = versus; window.__engine = versus;
+  versus.viewW = renderer.resize();
   mode = 'playing';
   paused = false;
+  ais = [];
   $('#lobby').classList.add('hidden');
-  engine.configure(
+  versus.configure(
     CHARACTER_LIST[selection.p1.charIdx].id,
     CHARACTER_LIST[selection.p2.charIdx].id
   );
   broadcastState(true);
 }
 
-function restartMatch() {
+function startSmash() {
+  const humans = connectedSlots();
+  const total = Math.min(4, humans.length + botsCount);
+  if (total < 2) return;
+  audio.init();
   audio.startMusic('battle');
-  engine.rematch();
+
+  const entries = [];
+  const used = new Set();
+  humans.forEach((s) => { entries.push({ slot: s, charId: CHARACTER_LIST[selection[s].charIdx].id, cpu: false }); used.add(s); });
+  const botChars = ['darkmeregrand', 'darkpadre', 'meregrand', 'padre'];
+  let bi = 0;
+  for (const s of SLOTS4) {
+    if (entries.length >= total) break;
+    if (used.has(s)) continue;
+    entries.push({ slot: s, charId: botChars[bi % botChars.length], cpu: true }); used.add(s); bi++;
+  }
+  entries.sort((a, b) => SLOTS4.indexOf(a.slot) - SLOTS4.indexOf(b.slot));
+
+  active = smash; window.__engine = smash;
+  smash.viewW = renderer.resize();
+  mode = 'playing';
+  paused = false;
+  soloMode = false;
+  $('#lobby').classList.add('hidden');
+  smash.configure(entries);
+  ais = entries.filter((e) => e.cpu).map((e) => new AIController(e.slot, null, 1));
   broadcastState(true);
 }
 
-// --- Mode 1 joueur (vs CPU) ---
+function restartMatch() {
+  audio.startMusic('battle');
+  active.rematch();
+  broadcastState(true);
+}
+
+// --- Mode 1 joueur versus (vs CPU) ---
 function startSolo(slot) {
+  if (gameMode === 'smash') { // en smash, "solo" = smash contre les bots
+    selection[slot].connected = true; selection[slot].ready = true;
+    maybeStart();
+    return;
+  }
   audio.init();
   audio.startMusic('battle');
   humanSlot = slot;
@@ -181,11 +260,13 @@ function startSolo(slot) {
   const humanIdx = selection[slot].charIdx;
   selection[slot].connected = true;
   selection[cpuSlot].charIdx = (humanIdx + 1) % CHARACTER_LIST.length;
+  active = versus; window.__engine = versus;
+  versus.viewW = renderer.resize();
   mode = 'playing';
   paused = false;
   $('#lobby').classList.add('hidden');
-  engine.configure(CHARACTER_LIST[selection.p1.charIdx].id, CHARACTER_LIST[selection.p2.charIdx].id);
-  ai = new AIController(cpuSlot, slot, 1);
+  versus.configure(CHARACTER_LIST[selection.p1.charIdx].id, CHARACTER_LIST[selection.p2.charIdx].id);
+  ais = [new AIController(cpuSlot, slot, 1)];
   broadcastState(true);
 }
 
@@ -194,19 +275,19 @@ function startSolo(slot) {
 // ------------------------------------------------------------------
 function handleHaptics(type, data) {
   if (type === 'hit') {
-    buzz(data.slot, data.heavy ? [45] : [20]);           // la victime encaisse
-    if (data.atk) buzz(data.atk, data.heavy ? [12] : [6]); // l'attaquant sent le contact
+    buzz(data.slot, data.heavy ? [45] : [20]);
+    if (data.atk) buzz(data.atk, data.heavy ? [12] : [6]);
   } else if (type === 'block') {
     buzz(data.slot, [8]);
   } else if (type === 'throw') {
-    buzz(data.slot, [70, 30, 90]);                        // grosse projection
+    buzz(data.slot, [70, 30, 90]);
     if (data.atk) buzz(data.atk, [15]);
   } else if (type === 'armor') {
-    buzz(data.slot, [12, 15]);                            // clang d'armure
+    buzz(data.slot, [12, 15]);
   } else if (type === 'dash') {
     buzz(data.slot, [7]);
   } else if (type === 'transform') {
-    buzz(data.slot, [30, 40, 60, 40, 90]);               // montée en rage
+    buzz(data.slot, [30, 40, 60, 40, 90]);
     pushState(data.slot);
   } else if (type === 'ko') {
     buzz(data.slot, [90]);
@@ -222,12 +303,11 @@ function buzz(slot, pattern) {
 
 let stateTick = 0;
 function broadcastState(force = false) {
-  pushState('p1', force);
-  pushState('p2', force);
+  for (const f of active.fighterList) pushState(f.slot, force);
 }
 
 function pushState(slot) {
-  const f = engine.fighters[slot];
+  const f = active.fighters[slot];
   if (!f || !net) return;
   net.send(slot, {
     t: 'state',
@@ -238,7 +318,10 @@ function pushState(slot) {
     charName: f.char.name,
     specialName: f.char.specials[f.formIndex].name,
     specialLocked: f.specialLock > 0,
-    phase: engine.phase,
+    phase: active.phase,
+    mode: active.mode,
+    stocks: typeof f.stocks === 'number' ? f.stocks : null,
+    eliminated: !!f.eliminated,
   });
 }
 
@@ -255,22 +338,21 @@ function frame(now) {
   let steps = 0;
   while (acc >= TICK_MS && steps < 5) {
     if (mode === 'playing' && !paused) {
-      if (ai) ai.update(engine);
-      engine.update();
+      for (const a of ais) a.update(active);
+      active.update();
     }
     acc -= TICK_MS;
     steps++;
   }
-  renderer.render(engine);
+  renderer.render(active);
 
   if (mode === 'playing') {
-    // Intensité musicale = niveau de rage max des deux combattants
-    const p1 = engine.fighters.p1, p2 = engine.fighters.p2;
-    if (p1 && p2) audio.setMusicIntensity(Math.max(p1.formIndex, p2.formIndex) / 2);
-    // Musique plus calme à la fin du match
-    if (engine.phase === 'matchEnd' && audio.music.track === 'battle') audio.startMusic('menu');
-
-    // Envoi périodique de l'état aux manettes (~12 Hz)
+    const fs = active.fighterList;
+    if (fs.length) {
+      const maxForm = Math.max(...fs.map((f) => f.formIndex));
+      audio.setMusicIntensity(maxForm / 2);
+    }
+    if (active.phase === 'matchEnd' && audio.music.track === 'battle') audio.startMusic('menu');
     if (!paused) {
       stateTick++;
       if (stateTick % 5 === 0) broadcastState();
@@ -279,28 +361,46 @@ function frame(now) {
 }
 requestAnimationFrame(frame);
 
-// Exposé pour le debug depuis la console du navigateur (ex: window.__engine)
-window.__engine = engine;
+window.__engine = active;
 window.__renderer = renderer;
+window.__versus = versus;
+window.__smash = smash;
 
 // Résolution dynamique : le canvas remplit l'écran, sans bandes ni déformation
-function handleResize() { engine.viewW = renderer.resize(); }
+function handleResize() {
+  const w = renderer.resize();
+  versus.viewW = w; smash.viewW = w;
+}
 window.addEventListener('resize', handleResize);
 window.addEventListener('orientationchange', () => setTimeout(handleResize, 150));
 handleResize();
 
-// Sélecteur du nombre de manches gagnantes (sur l'écran de jeu)
+// Sélecteur du mode de jeu (Versus / Smash)
+document.querySelectorAll('.gmode-opt').forEach((b) => {
+  if (b.disabled) return;
+  b.addEventListener('click', () => setGameMode(b.dataset.gmode));
+});
+// Sélecteur du nombre de bots (smash)
+document.querySelectorAll('.bots-opt').forEach((b) => {
+  b.addEventListener('click', () => { botsCount = Number(b.dataset.bots); updateLobby(); });
+});
+// Bouton LANCER (smash)
+const startSmashBtn = $('#startSmash');
+if (startSmashBtn) startSmashBtn.addEventListener('click', () => startSmash());
+
+// Sélecteur du nombre de manches gagnantes (versus)
 document.querySelectorAll('.round-opt').forEach((b) => {
   b.addEventListener('click', () => {
-    engine.roundsToWin = Number(b.dataset.rounds);
+    versus.roundsToWin = Number(b.dataset.rounds);
     document.querySelectorAll('.round-opt').forEach((o) => o.classList.toggle('active', o === b));
   });
 });
 
 // ------------------------------------------------------------------
-// Clavier de secours (test à 2 sur un PC)
+// Clavier de secours (test sur un PC)
 //   J1 : A/D=déplacer, W=saut, S=accroupi, F=coup, G=pied, H=spécial, V=garde
 //   J2 : ←/→, ↑, ↓, J=coup, K=pied, L=spécial, N=garde
+//   C  = solo versus vs CPU · B = smash (toi + bots) · M = mute
 // ------------------------------------------------------------------
 const KEYMAP = {
   KeyA: ['p1', 'left'], KeyD: ['p1', 'right'], KeyW: ['p1', 'up'], KeyS: ['p1', 'down'],
@@ -314,26 +414,25 @@ window.addEventListener('keydown', (e) => {
   if (e.code === 'KeyM') { const muted = audio.toggleMute(); showToast(muted ? '🔇 Son coupé' : '🔊 Son activé'); return; }
   const m = KEYMAP[e.code];
   if (!m) {
-    if (e.code === 'KeyC' && mode === 'lobby') { startSoloKeyboard(); return; }
-    if (e.code === 'Enter' && engine.phase === 'matchEnd') restartMatch();
+    if (e.code === 'KeyC' && mode === 'lobby') { gameMode = 'versus'; startSoloKeyboard(); return; }
+    if (e.code === 'KeyB' && mode === 'lobby') { startSmashKeyboard(); return; }
+    if (e.code === 'Enter' && active.phase === 'matchEnd') restartMatch();
     return;
   }
-  if (soloMode && m[0] !== humanSlot) return; // en solo au clavier, le J2 est le CPU
+  if (soloMode && m[0] !== humanSlot) return;
   e.preventDefault();
   if (keyHeld[e.code]) return;
   keyHeld[e.code] = true;
-  // Le clavier permet aussi de tester sans téléphone : on marque les
-  // deux joueurs comme connectés/prêts et on démarre au premier appui.
-  if (mode === 'lobby') { forceKeyboardStart(); }
-  if (engine.phase === 'matchEnd' && m[1] === 'special') { restartMatch(); return; }
-  engine.setInput(m[0], m[1], true);
+  if (mode === 'lobby' && gameMode === 'versus') { forceKeyboardStart(); }
+  if (active.phase === 'matchEnd' && m[1] === 'special') { restartMatch(); return; }
+  active.setInput(m[0], m[1], true);
 });
 window.addEventListener('keyup', (e) => {
   const m = KEYMAP[e.code];
   if (!m) return;
   if (soloMode && m[0] !== humanSlot) return;
   keyHeld[e.code] = false;
-  engine.setInput(m[0], m[1], false);
+  active.setInput(m[0], m[1], false);
 });
 
 let keyboardStarted = false;
@@ -341,15 +440,10 @@ function forceKeyboardStart() {
   if (keyboardStarted) return;
   keyboardStarted = true;
   selection.p1.connected = selection.p2.connected = true;
-  audio.init();
-  audio.startMusic('battle');
-  mode = 'playing';
-  paused = false;
-  $('#lobby').classList.add('hidden');
-  engine.configure(CHARACTER_LIST[selection.p1.charIdx].id, CHARACTER_LIST[selection.p2.charIdx].id);
+  startVersus();
 }
 
-// Solo au clavier : J1 = toi, J2 = CPU (touche C)
+// Solo versus au clavier : J1 = toi, J2 = CPU (touche C)
 function startSoloKeyboard() {
   if (keyboardStarted) return;
   keyboardStarted = true;
@@ -357,13 +451,33 @@ function startSoloKeyboard() {
   soloMode = true;
   selection.p1.connected = true;
   selection.p2.charIdx = (selection.p1.charIdx + 1) % CHARACTER_LIST.length;
+  active = versus; window.__engine = versus;
   audio.init();
   audio.startMusic('battle');
   mode = 'playing';
   paused = false;
   $('#lobby').classList.add('hidden');
-  engine.configure(CHARACTER_LIST[selection.p1.charIdx].id, CHARACTER_LIST[selection.p2.charIdx].id);
-  ai = new AIController('p2', 'p1', 1);
+  versus.configure(CHARACTER_LIST[selection.p1.charIdx].id, CHARACTER_LIST[selection.p2.charIdx].id);
+  ais = [new AIController('p2', 'p1', 1)];
+}
+
+// Smash au clavier : J1 = toi (clavier), le reste = bots (touche B)
+function startSmashKeyboard() {
+  if (keyboardStarted) return;
+  keyboardStarted = true;
+  gameMode = 'smash';
+  selection.p1.connected = true;
+  const total = Math.min(4, 1 + Math.max(1, botsCount));
+  const entries = [{ slot: 'p1', charId: CHARACTER_LIST[selection.p1.charIdx].id, cpu: false }];
+  const botChars = ['darkmeregrand', 'darkpadre', 'padre'];
+  for (let i = 1; i < total; i++) entries.push({ slot: SLOTS4[i], charId: botChars[(i - 1) % botChars.length], cpu: true });
+  active = smash; window.__engine = smash;
+  audio.init(); audio.startMusic('battle');
+  smash.viewW = renderer.resize();
+  mode = 'playing'; paused = false;
+  $('#lobby').classList.add('hidden');
+  smash.configure(entries);
+  ais = entries.filter((e) => e.cpu).map((e) => new AIController(e.slot, null, 1));
 }
 
 // Petit toast d'info (mute, etc.)

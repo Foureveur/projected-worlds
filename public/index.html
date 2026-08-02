@@ -33,6 +33,13 @@
             </div>
           </div>
 
+          <div class="gmode">
+            <span class="gmode-label">Mode :</span>
+            <button class="gmode-opt active" data-gmode="versus">⚔️ Versus 1v1</button>
+            <button class="gmode-opt" data-gmode="smash">🥊 Smash 2-4</button>
+            <button class="gmode-opt soon" data-gmode="sor" disabled>🌆 Streets of Rage (bientôt)</button>
+          </div>
+
           <div class="cards">
             <div id="card-p1" class="card">
               <div class="tag">JOUEUR 1</div>
@@ -46,18 +53,42 @@
               <div class="char-sub">—</div>
               <div class="status">En attente du téléphone…</div>
             </div>
+            <div id="card-p3" class="card hidden">
+              <div class="tag">JOUEUR 3</div>
+              <div class="char-name">—</div>
+              <div class="char-sub">—</div>
+              <div class="status">En attente du téléphone…</div>
+            </div>
+            <div id="card-p4" class="card hidden">
+              <div class="tag">JOUEUR 4</div>
+              <div class="char-name">—</div>
+              <div class="char-sub">—</div>
+              <div class="status">En attente du téléphone…</div>
+            </div>
           </div>
 
-          <div class="rounds">
+          <div id="roundsRow" class="rounds">
             <span class="rounds-label">Manches gagnantes :</span>
             <button class="round-opt" data-rounds="1">1</button>
             <button class="round-opt active" data-rounds="2">2</button>
             <button class="round-opt" data-rounds="3">3</button>
           </div>
 
+          <div id="smashCtrls" class="smash-ctrls hidden">
+            <div class="bots-row">
+              <span class="rounds-label">Bots CPU :</span>
+              <button class="bots-opt" data-bots="0">0</button>
+              <button class="bots-opt active" data-bots="1">1</button>
+              <button class="bots-opt" data-bots="2">2</button>
+              <button class="bots-opt" data-bots="3">3</button>
+            </div>
+            <button id="startSmash" class="big-start" disabled>LANCER SMASH</button>
+            <p class="smash-hint">Chaque joueur choisit son perso puis <b>PRÊT</b>. Complète avec des bots pour jouer à moins de 4. Dernier debout gagne.</p>
+          </div>
+
           <p class="hint">Astuce clavier (test) —
             <b>J1</b> A/D W S + F/G/H/V · <b>J2</b> ←/→ ↑ ↓ + J/K/L/N ·
-            <b>C</b> = solo vs CPU</p>
+            <b>C</b> = solo vs CPU · <b>B</b> = smash + bots</p>
         </div>
       </div>
     </div>

@@ -128,6 +128,13 @@ function updateHud(s) {
   $('#waiting').classList.add('hidden');
   $('#hudName').textContent = s.charName || '';
   $('#hudForm').textContent = s.formName || '';
+  // Vies restantes (mode smash)
+  const st = $('#hudStocks');
+  if (st) {
+    if (s.mode === 'smash' && typeof s.stocks === 'number') {
+      st.textContent = s.eliminated ? '☠️ ÉLIMINÉ' : '❤'.repeat(Math.max(0, s.stocks));
+    } else st.textContent = '';
+  }
   $('#hudSpecial').textContent = (s.specialLocked ? '⏳ ' : '') + (s.specialName || '');
   const sp = $('#pad .act.special'); if (sp) sp.classList.toggle('locked', !!s.specialLocked);
   $('#hudHp').style.width = Math.max(0, s.health) + '%';

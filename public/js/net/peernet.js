@@ -47,10 +47,12 @@ function peerOptions(cfg) {
  *             onMessage(slot, msg), onError(err) }
  * Renvoie { send(slot,msg), broadcast(msg) }.
  */
+const HOST_SLOTS = ['p1', 'p2', 'p3', 'p4'];
+
 export async function host(handlers) {
   const cfg = await getConfig();
   const opts = peerOptions(cfg);
-  const conns = { p1: null, p2: null };
+  const conns = { p1: null, p2: null, p3: null, p4: null };
   let peer = null;
 
   function start(code, attempt) {
@@ -63,9 +65,9 @@ export async function host(handlers) {
 
     peer.on('connection', (conn) => {
       conn.on('open', () => {
-        const slot = !conns.p1 ? 'p1' : !conns.p2 ? 'p2' : null;
+        const slot = HOST_SLOTS.find((s) => !conns[s]) || null;
         if (!slot) {
-          conn.send({ t: 'error', reason: 'full', message: 'Partie pleine (2 joueurs).' });
+          conn.send({ t: 'error', reason: 'full', message: 'Partie pleine (4 joueurs).' });
           setTimeout(() => conn.close(), 150);
           return;
         }
@@ -93,7 +95,7 @@ export async function host(handlers) {
 
   return {
     send(slot, msg) { const c = conns[slot]; if (c && c.open) c.send(msg); },
-    broadcast(msg) { for (const s of ['p1', 'p2']) { const c = conns[s]; if (c && c.open) c.send(msg); } },
+    broadcast(msg) { for (const s of HOST_SLOTS) { const c = conns[s]; if (c && c.open) c.send(msg); } },
   };
 }
 

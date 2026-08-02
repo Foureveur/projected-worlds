@@ -97,6 +97,7 @@ html, body {
 }
 .hud-name { font-size: 11px; color: #fff; }
 #hudForm { color: var(--pink); }
+.hud-stocks { color: var(--red); font-size: 10px; margin-left: 4px; }
 .bars { display: flex; gap: 6px; width: min(360px, 80vw); }
 .bar { flex: 1; height: 10px; background: #2a1a2a; border-radius: 5px; overflow: hidden; border: 1px solid #000; }
 .bar.rage { flex: .8; }

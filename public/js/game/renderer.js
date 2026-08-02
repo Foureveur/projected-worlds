@@ -10,6 +10,10 @@
 
 import { STAGE_W, GROUND_Y, STATE, RAGE_MAX, RAGE_THRESHOLDS, ROUND_TIME } from './constants.js';
 
+// Couleurs d'identification par joueur (mode smash)
+const SLOT_COLORS = { p1: '#ff5bd0', p2: '#4ad6ff', p3: '#7ee081', p4: '#f5d90a' };
+const SLOT_LABEL = { p1: 'P1', p2: 'P2', p3: 'P3', p4: 'P4' };
+
 export class Renderer {
   constructor(canvas) {
     this.canvas = canvas;
@@ -51,7 +55,8 @@ export class Renderer {
     ctx.clearRect(0, 0, this.W, this.H);
 
     // Avant la configuration (salon), on dessine juste le décor.
-    if (!engine.fighters.p1 || !engine.fighters.p2) {
+    const list = engine.fighterList || [];
+    if (list.length === 0) {
       this._drawBackground(ctx, cam);
       this._drawGround(ctx, cam);
       return;
@@ -69,14 +74,17 @@ export class Renderer {
     this._drawPlatforms(ctx, cam, engine);
 
     // Ombres
-    for (const slot of ['p1', 'p2']) this._drawShadow(ctx, cam, engine.fighters[slot]);
+    for (const f of list) this._drawShadow(ctx, cam, f);
 
     // Combattants (le plus en retrait dessiné d'abord)
-    const order = [engine.fighters.p1, engine.fighters.p2].sort((a, b) => a.pos.y - b.pos.y);
+    const order = list.slice().sort((a, b) => a.pos.y - b.pos.y);
     for (const f of order) this._drawFighter(ctx, cam, f, engine);
 
     this._drawProjectiles(ctx, cam, engine);
     this._drawEffects(ctx, cam, engine);
+
+    // Repères de joueur au-dessus des têtes (mode smash à 4)
+    if (engine.mode === 'smash') this._drawPlayerTags(ctx, cam, engine);
 
     ctx.restore();
 
@@ -86,8 +94,12 @@ export class Renderer {
       ctx.fillRect(0, 0, this.W, this.H);
     }
 
-    this._drawHUD(ctx, engine);
-    this._drawCombo(ctx, engine);
+    if (engine.mode === 'smash') {
+      this._drawSmashHUD(ctx, engine);
+    } else {
+      this._drawHUD(ctx, engine);
+      this._drawCombo(ctx, engine);
+    }
     this._drawAnnounce(ctx, engine);
   }
 
@@ -519,6 +531,82 @@ export class Renderer {
       }
     }
     ctx.globalAlpha = 1;
+  }
+
+  // ------------------------------------------------------------------
+  // Smash : repères de joueur + HUD compact à 4
+  // ------------------------------------------------------------------
+  _drawPlayerTags(ctx, cam, engine) {
+    for (const f of engine.fighterList) {
+      if (f.eliminated || f.state === STATE.KO) continue;
+      const col = SLOT_COLORS[f.slot] || '#fff';
+      const head = this.w2s(cam, f.pos.x, f.pos.y + (f.char.body.h + 22) * f.scale);
+      // Petit triangle pointant vers le bas + libellé
+      ctx.save();
+      ctx.globalAlpha = f.invuln > 0 && Math.floor(this.t / 3) % 2 === 0 ? 0.4 : 1;
+      ctx.fillStyle = col;
+      ctx.beginPath();
+      ctx.moveTo(head.x, head.y + 8);
+      ctx.lineTo(head.x - 6, head.y - 2);
+      ctx.lineTo(head.x + 6, head.y - 2);
+      ctx.closePath(); ctx.fill();
+      ctx.font = 'bold 9px "Press Start 2P", monospace';
+      ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+      this._outlinedText(ctx, SLOT_LABEL[f.slot] || '', head.x, head.y - 3, 9, col);
+      ctx.restore();
+    }
+  }
+
+  _drawSmashHUD(ctx, engine) {
+    const list = engine.fighterList;
+    const n = list.length;
+    if (!n) return;
+    const gap = 10;
+    const panelW = Math.min(200, (this.W - gap * (n + 1)) / n);
+    const panelH = 46, y = 8;
+    ctx.textBaseline = 'alphabetic';
+    for (let i = 0; i < n; i++) {
+      const f = list[i];
+      const x = gap + i * (panelW + gap);
+      const col = SLOT_COLORS[f.slot] || '#fff';
+      const dead = f.eliminated;
+
+      // Cadre
+      ctx.globalAlpha = dead ? 0.4 : 1;
+      ctx.fillStyle = '#120a24';
+      ctx.fillRect(x - 2, y - 2, panelW + 4, panelH + 4);
+      ctx.strokeStyle = col; ctx.lineWidth = 2;
+      ctx.strokeRect(x - 2, y - 2, panelW + 4, panelH + 4);
+
+      // Nom
+      ctx.font = 'bold 10px monospace';
+      ctx.fillStyle = col;
+      ctx.textAlign = 'left';
+      ctx.fillText(`${SLOT_LABEL[f.slot]} ${f.char.short || f.char.name}`, x + 4, y + 12);
+
+      // Barre de vie
+      const barW = panelW - 8, barH = 9, by = y + 17;
+      const hpPct = Math.max(0, f.health) / 100;
+      ctx.fillStyle = '#4a1220'; ctx.fillRect(x + 4, by, barW, barH);
+      let hc = '#3ad14a'; if (hpPct < 0.3) hc = '#ff3a3a'; else if (hpPct < 0.6) hc = '#f5d90a';
+      ctx.fillStyle = dead ? '#555' : hc; ctx.fillRect(x + 4, by, barW * hpPct, barH);
+
+      // Vies restantes (petits carrés)
+      const sy = by + barH + 5, ss = 7;
+      for (let k = 0; k < this.stocksToShow(engine); k++) {
+        ctx.fillStyle = k < f.stocks ? col : '#3a2a4a';
+        ctx.fillRect(x + 4 + k * (ss + 3), sy, ss, ss);
+      }
+      if (dead) {
+        ctx.fillStyle = '#ff5a5a'; ctx.font = 'bold 9px monospace'; ctx.textAlign = 'right';
+        ctx.fillText('KO', x + panelW - 4, sy + ss);
+      }
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  stocksToShow(engine) {
+    return engine.stocksMax || 3;
   }
 
   // ------------------------------------------------------------------

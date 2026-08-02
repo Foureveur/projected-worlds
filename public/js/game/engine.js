@@ -24,6 +24,7 @@ export class Engine {
       { onEvent() {}, },
       hooks
     );
+    this.mode = 'versus';
     this.fighters = { p1: null, p2: null };
     this.projectiles = [];
     this.effects = [];
@@ -440,5 +441,10 @@ export class Engine {
 
   get timeLeft() {
     return Math.max(0, Math.ceil(this.roundTimer / 60));
+  }
+
+  // Liste générique des combattants (utilisée par le rendu, commune aux modes)
+  get fighterList() {
+    return [this.fighters.p1, this.fighters.p2].filter(Boolean);
   }
 }

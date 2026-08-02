@@ -45,10 +45,23 @@ export class AIController {
     else this._tap(engine, 'special');
   }
 
+  _pickFoe(engine, me) {
+    // foeSlot fixe (versus) — sinon, cible l'ennemi vivant le plus proche (smash)
+    if (this.foeSlot) return engine.fighters[this.foeSlot];
+    let best = null, bd = Infinity;
+    for (const o of engine.fighterList) {
+      if (o === me || o.eliminated) continue;
+      const d = Math.abs(o.pos.x - me.pos.x);
+      if (d < bd) { bd = d; best = o; }
+    }
+    return best;
+  }
+
   update(engine) {
     const me = engine.fighters[this.slot];
-    const foe = engine.fighters[this.foeSlot];
-    if (!me || !foe) return;
+    if (!me || me.eliminated) return;
+    const foe = this._pickFoe(engine, me);
+    if (!foe) return;
 
     // Relâche les taps arrivés à terme
     for (const p of this.pendingUp) { if (--p.t <= 0) this._set(engine, p.btn, false); }
