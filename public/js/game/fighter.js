@@ -75,6 +75,7 @@ export class Fighter {
     if (!down) return;
     switch (btn) {
       case 'up': this.jumpBuffer = BUFFER_FRAMES; break;
+      case 'jump': this.jumpBuffer = BUFFER_FRAMES; break; // bouton saut dédié (manette)
       case 'punch':
         // Garde maintenue + Coup = projection
         this.attackBuffer = { kind: this.input.block ? 'throw' : 'light', frames: BUFFER_FRAMES };

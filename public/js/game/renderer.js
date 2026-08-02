@@ -54,6 +54,9 @@ export class Renderer {
 
     ctx.clearRect(0, 0, this.W, this.H);
 
+    // Mode beat'em up : chemin de rendu dédié (rue + profondeur + HUD co-op)
+    if (engine.mode === 'streets') { this._renderStreets(ctx, engine, cam); return; }
+
     // Avant la configuration (salon), on dessine juste le décor.
     const list = engine.fighterList || [];
     if (list.length === 0) {
@@ -607,6 +610,127 @@ export class Renderer {
 
   stocksToShow(engine) {
     return engine.stocksMax || 3;
+  }
+
+  // ------------------------------------------------------------------
+  // Streets of Rage : rue en 2.5D + HUD co-op
+  // ------------------------------------------------------------------
+  _renderStreets(ctx, engine, cam) {
+    ctx.save();
+    if (engine.shake > 0.4) { const s = engine.shake; ctx.translate((Math.random() - 0.5) * s, (Math.random() - 0.5) * s); }
+
+    this._drawCityBg(ctx, cam);
+    this._drawStreetGround(ctx, cam);
+
+    const list = (engine.fighterList || []);
+    for (const e of list) this._drawStreetShadow(ctx, cam, e);
+    const order = list.slice().sort((a, b) => a.pos.y - b.pos.y); // loin -> proche
+    for (const f of order) this._drawFighter(ctx, cam, f, engine);
+
+    this._drawProjectiles(ctx, cam, engine);
+    this._drawEffects(ctx, cam, engine);
+    ctx.restore();
+
+    if (engine.flash > 0) { ctx.fillStyle = `rgba(255,255,255,${engine.flash / 16})`; ctx.fillRect(0, 0, this.W, this.H); }
+
+    this._drawStreetsHUD(ctx, engine);
+    this._drawAnnounce(ctx, engine);
+  }
+
+  _drawCityBg(ctx, cam) {
+    // Ciel nocturne
+    const g = ctx.createLinearGradient(0, 0, 0, this.groundY);
+    g.addColorStop(0, '#0b1030'); g.addColorStop(0.6, '#241a46'); g.addColorStop(1, '#3a2450');
+    ctx.fillStyle = g; ctx.fillRect(0, 0, this.W, this.H);
+    // Lune
+    ctx.fillStyle = '#f4e9c1'; ctx.beginPath(); ctx.arc(this.W - 80, 46, 20, 0, Math.PI * 2); ctx.fill();
+    // Immeubles en silhouette (2 couches de parallaxe)
+    const layer = (speed, base, colH, col) => {
+      const off = (-cam.x * cam.zoom * speed);
+      ctx.fillStyle = col;
+      const bw = 78;
+      for (let i = -1; i < this.W / bw + 2; i++) {
+        const x = ((i * bw + (off % bw)) );
+        const h = base + ((i * 37) % colH);
+        ctx.fillRect(x, this.groundY - h, bw - 8, h);
+        // fenêtres
+        ctx.fillStyle = 'rgba(255,214,90,0.5)';
+        for (let wy = this.groundY - h + 10; wy < this.groundY - 12; wy += 18) {
+          for (let wx = x + 8; wx < x + bw - 16; wx += 16) if ((wx + wy) % 3 === 0) ctx.fillRect(wx, wy, 6, 8);
+        }
+        ctx.fillStyle = col;
+      }
+    };
+    layer(0.15, 90, 70, '#160f30');
+    layer(0.32, 60, 110, '#20153e');
+  }
+
+  _drawStreetGround(ctx, cam) {
+    const bandTop = this.groundY - 96 * 0.9 * cam.zoom - 6; // ZMAX * DEPTH_SCALE
+    // Trottoir
+    ctx.fillStyle = '#2a2036'; ctx.fillRect(0, bandTop - 10, this.W, 12);
+    // Chaussée
+    ctx.fillStyle = '#3a3340'; ctx.fillRect(0, bandTop, this.W, this.H - bandTop);
+    ctx.fillStyle = '#4a4350'; ctx.fillRect(0, bandTop, this.W, 4);
+    // Marquage central défilant
+    ctx.fillStyle = 'rgba(245,217,10,0.5)';
+    const midY = (bandTop + this.H) / 2;
+    const step = 60 * cam.zoom; const off = (-cam.x * cam.zoom) % step;
+    for (let x = off; x < this.W; x += step) ctx.fillRect(x, midY, 26 * cam.zoom, 4);
+  }
+
+  _drawStreetShadow(ctx, cam, e) {
+    if (!e || e.dead) return;
+    const groundPosY = GROUND_Y - (e.z || 0) * 0.9;
+    const s = this.w2s(cam, e.x, groundPosY);
+    const w = (e.char.body.w * (e.scale || 1)) * cam.zoom;
+    const air = Math.max(0.4, 1 - (e.jumpY || 0) / 90);
+    ctx.fillStyle = 'rgba(0,0,0,0.3)';
+    ctx.beginPath();
+    ctx.ellipse(s.x, s.y + 2, w * 0.6 * air, 4.5 * cam.zoom * air, 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  _drawStreetsHUD(ctx, engine) {
+    const hud = engine.hud; if (!hud) return;
+    // Panneaux joueurs (haut gauche, empilés/juxtaposés)
+    const pw = 168, ph = 40, gap = 8;
+    hud.players.forEach((p, i) => {
+      const col = i % 2, row = (i - col) / 2;
+      const x = gap + col * (pw + gap);
+      const y = gap + row * (ph + gap);
+      ctx.globalAlpha = p.dead ? 0.4 : 1;
+      ctx.fillStyle = '#120a24'; ctx.fillRect(x - 2, y - 2, pw + 4, ph + 4);
+      ctx.strokeStyle = p.color || '#fff'; ctx.lineWidth = 2; ctx.strokeRect(x - 2, y - 2, pw + 4, ph + 4);
+      ctx.font = 'bold 9px monospace'; ctx.fillStyle = p.color || '#fff'; ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+      ctx.fillText(`${p.slot ? p.slot.toUpperCase() : ''} ${p.name}`, x + 4, y + 11);
+      const barW = pw - 8, barH = 8, by = y + 15;
+      const hpPct = Math.max(0, p.hp) / p.maxHp;
+      ctx.fillStyle = '#4a1220'; ctx.fillRect(x + 4, by, barW, barH);
+      let hc = '#3ad14a'; if (hpPct < 0.3) hc = '#ff3a3a'; else if (hpPct < 0.6) hc = '#f5d90a';
+      ctx.fillStyle = p.dead ? '#555' : hc; ctx.fillRect(x + 4, by, barW * hpPct, barH);
+      // Vies
+      const sy = by + barH + 4;
+      ctx.font = '9px monospace'; ctx.fillStyle = p.color || '#fff';
+      ctx.fillText(p.dead ? '☠️ GAME OVER' : '♥ '.repeat(Math.max(0, p.lives)) || '—', x + 4, sy + 7);
+    });
+    ctx.globalAlpha = 1;
+
+    // Barre de vie du boss
+    if (hud.boss) {
+      const b = hud.boss; const bw = Math.min(360, this.W * 0.5); const bx = (this.W - bw) / 2; const byy = this.H - 30;
+      ctx.fillStyle = '#120a24'; ctx.fillRect(bx - 3, byy - 3, bw + 6, 18);
+      ctx.fillStyle = '#4a1220'; ctx.fillRect(bx, byy, bw, 12);
+      ctx.fillStyle = '#ff3a3a'; ctx.fillRect(bx, byy, bw * Math.max(0, b.hp) / b.maxHp, 12);
+      ctx.strokeStyle = '#f5d90a'; ctx.lineWidth = 2; ctx.strokeRect(bx, byy, bw, 12);
+      ctx.font = 'bold 9px monospace'; ctx.fillStyle = '#fff'; ctx.textAlign = 'center';
+      ctx.fillText('BOSS · ' + (b.char.name || '').toUpperCase(), this.W / 2, byy - 5);
+    } else {
+      // Compteur d'ennemis restants
+      ctx.font = 'bold 11px monospace'; ctx.fillStyle = '#f5d90a'; ctx.textAlign = 'right'; ctx.textBaseline = 'top';
+      const left = hud.enemies + hud.queue;
+      if (left > 0 && engine.phase === 'play') ctx.fillText('ENNEMIS : ' + left, this.W - 12, 12);
+    }
   }
 
   // ------------------------------------------------------------------

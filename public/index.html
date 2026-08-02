@@ -37,7 +37,7 @@
             <span class="gmode-label">Mode :</span>
             <button class="gmode-opt active" data-gmode="versus">⚔️ Versus 1v1</button>
             <button class="gmode-opt" data-gmode="smash">🥊 Smash 2-4</button>
-            <button class="gmode-opt soon" data-gmode="sor" disabled>🌆 Streets of Rage (bientôt)</button>
+            <button class="gmode-opt" data-gmode="sor">🌆 Streets of Rage</button>
           </div>
 
           <div class="cards">
@@ -86,9 +86,21 @@
             <p class="smash-hint">Chaque joueur choisit son perso puis <b>PRÊT</b>. Complète avec des bots pour jouer à moins de 4. Dernier debout gagne.</p>
           </div>
 
+          <div id="streetsCtrls" class="smash-ctrls hidden">
+            <div class="bots-row">
+              <span class="rounds-label">Alliés CPU :</span>
+              <button class="allies-opt" data-allies="0">0</button>
+              <button class="allies-opt active" data-allies="1">1</button>
+              <button class="allies-opt" data-allies="2">2</button>
+              <button class="allies-opt" data-allies="3">3</button>
+            </div>
+            <button id="startStreets" class="big-start" disabled>LANCER CO-OP</button>
+            <p class="smash-hint">Beat'em up en équipe : avancez dans la rue, nettoyez les vagues d'ennemis et battez le <b>boss</b>. Déplacement en profondeur (haut/bas), <b>SAUT</b> à droite. Vies partagées.</p>
+          </div>
+
           <p class="hint">Astuce clavier (test) —
-            <b>J1</b> A/D W S + F/G/H/V · <b>J2</b> ←/→ ↑ ↓ + J/K/L/N ·
-            <b>C</b> = solo vs CPU · <b>B</b> = smash + bots</p>
+            <b>J1</b> A/D W S + Espace(saut) + F/G/H · <b>J2</b> ←/→ ↑ ↓ + J/K/L ·
+            <b>C</b> = solo · <b>B</b> = smash · <b>T</b> = streets</p>
         </div>
       </div>
     </div>
